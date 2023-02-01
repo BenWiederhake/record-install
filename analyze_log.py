@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from collections import Counter, namedtuple
+from collections import Counter, defaultdict, namedtuple
 import argparse
 import re
 
@@ -38,7 +38,7 @@ EVENT_EXIT_RE = re.compile(r"^\+\+\+ exited with ([0-9]+) \+\+\+$")
 SYSCALL_PARSE_PARTS = re.compile(r"^\((.*)\) += (?:([0-9xa-f-]+)(?:<(.+)>)?|(\?))(?: (?:(E[A-Z]+) \(.+\)|\(flags (.+)\)|(\(Timeout\))|\(\[(\{fd=.+\})\]\)))?$")
 
 
-UnfinishedSyscall = namedtuple("UnfinishedSyscall", ["name", "first_part"])
+UnfinishedSyscall = namedtuple("UnfinishedSyscall", ["name", "first_part", "start_time"])
 
 
 class Stats:
@@ -46,11 +46,15 @@ class Stats:
         self.type_counter = Counter()
         self.parse_errors = 0
         # unfinished_syscalls is a dict of:
-        # * keys: pid (e.g. -2 or 3908497)
+        # * keys: pid (e.g. "initial" or 3908497)
         # * values: instance of class UnfinishedSyscall
         self.unfinished_syscalls = dict()
         self.initial_pid = None
         # Fun fact: vfork does *NOT* return twice, so no need to handle that.
+        # events is a dict of:
+        # * keys: pid (e.g. "initial" or 3908497)
+        # * values: list of events. Each event is a dict, including a field "type" which can be "syscall", "exit", or "signal".
+        self.events = defaultdict(list)
 
     def parse_error_line(self, lineno, line):
         print(f"ERROR: Cannot parse line {lineno + 1}: Unrecognizable line '{line}'")
@@ -72,7 +76,7 @@ class Stats:
             print(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
             self.parse_errors += 1
             del self.unfinished_syscalls[pid]
-        self.parse_assembled_syscall(pid, timestr, syscall_name, full_args)
+        self.parse_assembled_syscall(pid, timestr, syscall_name, full_args, None)
 
     def record_syscall_unfinished(self, pid, timestr, syscall_name, first_part):
         pid = self.try_resolve_pid(pid)
@@ -80,7 +84,7 @@ class Stats:
         if pid in self.unfinished_syscalls:
             print(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
             self.parse_errors += 1
-        self.unfinished_syscalls[pid] = UnfinishedSyscall(syscall_name, first_part)
+        self.unfinished_syscalls[pid] = UnfinishedSyscall(syscall_name, first_part, timestr)
 
     def record_syscall_resume(self, pid, timestr, syscall_name, last_part):
         pid = self.try_resolve_pid(pid)
@@ -96,19 +100,28 @@ class Stats:
             self.parse_errors += 1
             # The "discard" happens implicitly by having already deleted the entry and now refusing to act upon it.
             return
-        self.parse_assembled_syscall(pid, timestr, syscall_name, unfinished_syscall.first_part + last_part)
+        self.parse_assembled_syscall(pid, timestr, syscall_name, unfinished_syscall.first_part + last_part, unfinished_syscall.start_time)
 
     def record_exit(self, pid, timestr, returncode):
         pid = self.try_resolve_pid(pid)
         self.type_counter["syscall_exit"] += 1
-        pass  # print(f"exit -> {returncode}")
+        self.events[pid].append({
+            "type": "exit",
+            "time": timestr,
+            "returncode": returncode,
+        })
 
     def record_signal(self, pid, timestr, signal_name, signal_desc):
         pid = self.try_resolve_pid(pid)
         self.type_counter["syscall_signal"] += 1
-        pass  # print(f"signal -> {signal_name} {signal_desc}")
+        self.events[pid].append({
+            "type": "signal",
+            "time": timestr,
+            "signal_name": signal_name,
+            "signal_desc": signal_desc,
+        })
 
-    def parse_assembled_syscall(self, pid, timestr, syscall_name, full_args):
+    def parse_assembled_syscall(self, pid, timestr, syscall_name, full_args, start_time):
         assert pid == self.try_resolve_pid(pid)
         match = SYSCALL_PARSE_PARTS.match(full_args)
         if match is None:
@@ -116,7 +129,19 @@ class Stats:
             self.parse_errors += 1
             return
         raw_args, retval_finished, retval_path, retval_unfinished, errno, flags, timeout, pollresult = match.groups()
-        pass  # print(f"assembled_syscall [{pid}] -> {syscall_name}() -> {retval_finished=} {retval_path=} {retval_unfinished=} {errno=} {flags=} {timeout=} {pollresult=}")
+        self.events[pid].append({
+            "type": "syscall",
+            "time": timestr,
+            "start_time": start_time,
+            "args_RAW_FIXME": raw_args,
+            "retval_finished": retval_finished,
+            "retval_path": retval_path,
+            "retval_unfinished": retval_unfinished,
+            "errno": errno,
+            "flags": flags,
+            "timeout": timeout,
+            "pollresult": pollresult,
+        })
         if syscall_name == "getpid" and pid == "initial":
             assert retval_finished is not None
             self.discover_initial_pid(int(retval_finished))
@@ -125,7 +150,9 @@ class Stats:
         assert self.initial_pid is None
         assert "initial" not in self.unfinished_syscalls
         self.initial_pid = numeric_pid
-        # TODO: Update other structures
+        assert numeric_pid not in self.events, f"Fork of {numeric_pid} before getpid?! Not supported!"
+        self.events[numeric_pid] = self.events["initial"]
+        del self.events["initial"]
 
     def print_summary(self):
         for pid, unfinished_syscall in self.unfinished_syscalls.items():
@@ -134,7 +161,9 @@ class Stats:
         if self.initial_pid is None:
             self.parse_errors += 1
             print(f"ERROR: Initial pid never learned?! syscalls of initial program might be spread across two distinct entries.")
-        print(f"Parsing completed with {self.parse_errors} errors. Event types: {self.type_counter.most_common()}")
+        else:
+            assert "initial" not in self.events
+        print(f"Parsing completed with {self.parse_errors} errors. Event types: {self.type_counter.most_common()} {len(str(self.events))=}")
 
 
 PARSE_EVENT_REACTIONS = [
