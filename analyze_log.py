@@ -38,10 +38,10 @@ class Stats:
         self.type_counter = Counter()
         self.parse_errors = 0
         # unfinished_syscalls is a dict of:
-        # * keys: pidstr (e.g. None or "[pid 3908497] ")
+        # * keys: pid (e.g. -2 or 3908497)
         # * values: instance of class UnfinishedSyscall
         self.unfinished_syscalls = dict()
-        # FIXME: Try to cleverly recognize the `[NONE] getpid()` syscall to prevent confusion of pidstrs.
+        # FIXME: Try to cleverly recognize the `[NONE] getpid()` syscall to prevent confusion of pids.
         # Fun fact: vfork does *NOT* return twice, so no need to handle that.
 
     def parse_error_line(self, lineno, line):
@@ -52,51 +52,51 @@ class Stats:
         print(f"ERROR: Cannot parse line {lineno + 1}: Cannot parse event '{eventstr}'")
         self.parse_errors += 1
 
-    def record_syscall_complete(self, pidstr, timestr, syscall_name, full_args):
+    def record_syscall_complete(self, pid, timestr, syscall_name, full_args):
         self.type_counter["syscall_complete"] += 1
-        if pidstr in self.unfinished_syscalls:
-            print(f"ERROR: '{pidstr}' starts another unfinished syscall without returning first?! Discarding old unfinished!")
+        if pid in self.unfinished_syscalls:
+            print(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
             self.parse_errors += 1
-            del self.unfinished_syscalls[pidstr]
-        self.parse_assembled_syscall(pidstr, timestr, syscall_name, full_args)
+            del self.unfinished_syscalls[pid]
+        self.parse_assembled_syscall(pid, timestr, syscall_name, full_args)
 
-    def record_syscall_unfinished(self, pidstr, timestr, syscall_name, first_part):
+    def record_syscall_unfinished(self, pid, timestr, syscall_name, first_part):
         self.type_counter["syscall_unfinished"] += 1
-        if pidstr in self.unfinished_syscalls:
-            print(f"ERROR: '{pidstr}' starts another unfinished syscall without returning first?! Discarding old unfinished!")
+        if pid in self.unfinished_syscalls:
+            print(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
             self.parse_errors += 1
-        self.unfinished_syscalls[pidstr] = UnfinishedSyscall(syscall_name, first_part)
+        self.unfinished_syscalls[pid] = UnfinishedSyscall(syscall_name, first_part)
 
-    def record_syscall_resume(self, pidstr, timestr, syscall_name, last_part):
+    def record_syscall_resume(self, pid, timestr, syscall_name, last_part):
         self.type_counter["syscall_resume"] += 1
-        unfinished_syscall = self.unfinished_syscalls.get(pidstr, None)
+        unfinished_syscall = self.unfinished_syscalls.get(pid, None)
         if unfinished_syscall is None:
-            print(f"ERROR: '{pidstr}' returns from syscall {syscall_name} without starting one?! Discarding resume!")
+            print(f"ERROR: PID {pid} returns from syscall {syscall_name} without starting one?! Discarding resume!")
             self.parse_errors += 1
             return
-        del self.unfinished_syscalls[pidstr]
+        del self.unfinished_syscalls[pid]
         if unfinished_syscall.name != syscall_name:
-            print(f"ERROR: '{pidstr}' returns from syscall {syscall_name} after starting it as {unfinished_syscall.name}?! Discarding both parts!")
+            print(f"ERROR: PID {pid} returns from syscall {syscall_name} after starting it as {unfinished_syscall.name}?! Discarding both parts!")
             self.parse_errors += 1
             # The "discard" happens implicitly by having already deleted the entry and now refusing to act upon it.
             return
-        self.parse_assembled_syscall(pidstr, timestr, syscall_name, unfinished_syscall.first_part + last_part)
+        self.parse_assembled_syscall(pid, timestr, syscall_name, unfinished_syscall.first_part + last_part)
 
-    def record_exit(self, pidstr, timestr, returncode):
+    def record_exit(self, pid, timestr, returncode):
         self.type_counter["syscall_exit"] += 1
         pass  # print(f"exit -> {returncode}")
 
-    def record_signal(self, pidstr, timestr, signal_name, signal_desc):
+    def record_signal(self, pid, timestr, signal_name, signal_desc):
         self.type_counter["syscall_signal"] += 1
         pass  # print(f"signal -> {signal_name} {signal_desc}")
 
-    def parse_assembled_syscall(self, pidstr, timestr, syscall_name, full_args):
+    def parse_assembled_syscall(self, pid, timestr, syscall_name, full_args):
         pass  # print(f"assembled_syscall -> {syscall_name}@{full_args}")
 
     def print_summary(self):
-        for pidstr, unfinished_syscall in self.unfinished_syscalls.items():
+        for pid, unfinished_syscall in self.unfinished_syscalls.items():
             self.parse_errors += 1
-            print(f"ERROR: {pidstr} never returned from {unfinished_syscall.name}?! Discarding!")
+            print(f"ERROR: PID {pid} never returned from {unfinished_syscall.name}?! Discarding!")
         print(f"Parsing completed with {self.parse_errors} errors. Event types: {self.type_counter.most_common()}")
 
 
@@ -109,6 +109,14 @@ PARSE_EVENT_REACTIONS = [
 ]
 
 
+def parse_pidstr(pidstr):
+    if pidstr is None:
+        return "initial"  # strace sometimes doesn't report the PID. Ugh!
+    assert pidstr.startswith("[pid ") and pidstr.endswith("] "), pidstr.encode()
+    pid_bare = pidstr[len("[pid ") : -len("] ")]
+    return int(pid_bare)
+
+
 def parse_line_into(line, lineno, stats):
     # Ignore the initial package name and venv-dir location:
     if lineno == 0:
@@ -119,11 +127,12 @@ def parse_line_into(line, lineno, stats):
         stats.parse_error_line(lineno, line)
         return
     pidstr, timestr, eventstr = match.groups()
+    pid = parse_pidstr(pidstr)
     # Try to recognize the event type:
     for regex, record_fn in PARSE_EVENT_REACTIONS:
         event_match = regex.match(eventstr)
         if event_match:
-            record_fn(stats, pidstr, timestr, *event_match.groups())
+            record_fn(stats, pid, timestr, *event_match.groups())
             return
     # We cannot recognize this event!
     stats.parse_error_event(lineno, eventstr)
