@@ -2,6 +2,7 @@
 
 from collections import Counter, defaultdict, namedtuple
 import argparse
+import json
 import re
 
 # Example:
@@ -43,8 +44,7 @@ UnfinishedSyscall = namedtuple("UnfinishedSyscall", ["name", "first_part", "star
 
 class Stats:
     def __init__(self):
-        self.type_counter = Counter()
-        self.parse_errors = 0
+        self.parse_errors = []
         # unfinished_syscalls is a dict of:
         # * keys: pid (e.g. "initial" or 3908497)
         # * values: instance of class UnfinishedSyscall
@@ -56,13 +56,14 @@ class Stats:
         # * values: list of events. Each event is a dict, including a field "type" which can be "syscall", "exit", or "signal".
         self.events = defaultdict(list)
 
+    def log_error(self, errormsg):
+        self.parse_errors.append(errormsg)
+
     def parse_error_line(self, lineno, line):
-        print(f"ERROR: Cannot parse line {lineno + 1}: Unrecognizable line '{line}'")
-        self.parse_errors += 1
+        self.log_error(f"ERROR: Cannot parse line {lineno + 1}: Unrecognizable line '{line}'")
 
     def parse_error_event(self, lineno, eventstr):
-        print(f"ERROR: Cannot parse line {lineno + 1}: Cannot parse event '{eventstr}'")
-        self.parse_errors += 1
+        self.log_error(f"ERROR: Cannot parse line {lineno + 1}: Cannot parse event '{eventstr}'")
 
     def try_resolve_pid(self, pid):
         if pid == "initial" and self.initial_pid is not None:
@@ -71,40 +72,32 @@ class Stats:
 
     def record_syscall_complete(self, pid, timestr, syscall_name, full_args):
         pid = self.try_resolve_pid(pid)
-        self.type_counter["syscall_complete"] += 1
         if pid in self.unfinished_syscalls:
-            print(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
-            self.parse_errors += 1
+            self.log_error(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
             del self.unfinished_syscalls[pid]
         self.parse_assembled_syscall(pid, timestr, syscall_name, full_args, None)
 
     def record_syscall_unfinished(self, pid, timestr, syscall_name, first_part):
         pid = self.try_resolve_pid(pid)
-        self.type_counter["syscall_unfinished"] += 1
         if pid in self.unfinished_syscalls:
-            print(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
-            self.parse_errors += 1
+            self.log_error(f"ERROR: PID {pid} starts another unfinished syscall without returning first?! Discarding old unfinished!")
         self.unfinished_syscalls[pid] = UnfinishedSyscall(syscall_name, first_part, timestr)
 
     def record_syscall_resume(self, pid, timestr, syscall_name, last_part):
         pid = self.try_resolve_pid(pid)
-        self.type_counter["syscall_resume"] += 1
         unfinished_syscall = self.unfinished_syscalls.get(pid, None)
         if unfinished_syscall is None:
-            print(f"ERROR: PID {pid} returns from syscall {syscall_name} without starting one?! Discarding resume!")
-            self.parse_errors += 1
+            self.log_error(f"ERROR: PID {pid} returns from syscall {syscall_name} without starting one?! Discarding resume!")
             return
         del self.unfinished_syscalls[pid]
         if unfinished_syscall.name != syscall_name:
-            print(f"ERROR: PID {pid} returns from syscall {syscall_name} after starting it as {unfinished_syscall.name}?! Discarding both parts!")
-            self.parse_errors += 1
+            self.log_error(f"ERROR: PID {pid} returns from syscall {syscall_name} after starting it as {unfinished_syscall.name}?! Discarding both parts!")
             # The "discard" happens implicitly by having already deleted the entry and now refusing to act upon it.
             return
         self.parse_assembled_syscall(pid, timestr, syscall_name, unfinished_syscall.first_part + last_part, unfinished_syscall.start_time)
 
     def record_exit(self, pid, timestr, returncode):
         pid = self.try_resolve_pid(pid)
-        self.type_counter["syscall_exit"] += 1
         self.events[pid].append({
             "type": "exit",
             "time": timestr,
@@ -113,7 +106,6 @@ class Stats:
 
     def record_signal(self, pid, timestr, signal_name, signal_desc):
         pid = self.try_resolve_pid(pid)
-        self.type_counter["syscall_signal"] += 1
         self.events[pid].append({
             "type": "signal",
             "time": timestr,
@@ -125,14 +117,14 @@ class Stats:
         assert pid == self.try_resolve_pid(pid)
         match = SYSCALL_PARSE_PARTS.match(full_args)
         if match is None:
-            print(f"ERROR: PID {pid} {syscall_name}{full_args} cannot be parsed?!")
-            self.parse_errors += 1
+            self.log_error(f"ERROR: PID {pid} {syscall_name}{full_args} cannot be parsed?!")
             return
         raw_args, retval_finished, retval_path, retval_unfinished, errno, flags, timeout, pollresult = match.groups()
         self.events[pid].append({
             "type": "syscall",
             "time": timestr,
             "start_time": start_time,
+            "syscall_name": syscall_name,
             "args_RAW_FIXME": raw_args,
             "retval_finished": retval_finished,
             "retval_path": retval_path,
@@ -154,16 +146,18 @@ class Stats:
         self.events[numeric_pid] = self.events["initial"]
         del self.events["initial"]
 
-    def print_summary(self):
+    def finish(self):
         for pid, unfinished_syscall in self.unfinished_syscalls.items():
-            self.parse_errors += 1
-            print(f"ERROR: PID {pid} never returned from {unfinished_syscall.name}?! Discarding!")
+            self.log_error(f"ERROR: PID {pid} never returned from {unfinished_syscall.name}?! Discarding!")
         if self.initial_pid is None:
-            self.parse_errors += 1
-            print(f"ERROR: Initial pid never learned?! syscalls of initial program might be spread across two distinct entries.")
+            self.log_error(f"ERROR: Initial pid never learned?! syscalls of initial program might be spread across two distinct entries.")
         else:
             assert "initial" not in self.events
-        print(f"Parsing completed with {self.parse_errors} errors. Event types: {self.type_counter.most_common()} {len(str(self.events))=}")
+        return {
+            "initial_pid": self.initial_pid,
+            "parse_errors": self.parse_errors,
+            "events": self.events,
+        }
 
 
 PARSE_EVENT_REACTIONS = [
@@ -202,20 +196,26 @@ def parse_line_into(line, lineno, stats):
     stats.parse_error_event(lineno, eventstr)
 
 
-def run_with(log_filename):
+def run_with(log_filename, json_filename):
     stats = Stats()
     with open(log_filename, "r") as fp:
         for lineno, line in enumerate(fp):
             line = line.strip()
             parse_line_into(line, lineno, stats)
-    stats.print_summary()
+    stats_dict = stats.finish()
+    with open(json_filename, "w") as fp:
+        json.dump(stats_dict, fp)
+    for error in stats_dict['parse_errors']:
+        print(error)
+    print(f"Finished parsing {sum(len(entries) for entries in stats_dict['events'].values())} events across {len(stats_dict['events'])} processes.")
 
 
 def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("log_filename", metavar="INSTALLATION_LOG")
+    parser.add_argument("json_filename", metavar="JSON_OUTPUT")
     args = parser.parse_args()
-    run_with(args.log_filename)
+    run_with(args.log_filename, args.json_filename)
 
 
 if __name__ == "__main__":
