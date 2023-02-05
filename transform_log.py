@@ -3,6 +3,7 @@
 from collections import Counter, defaultdict, namedtuple
 import argparse
 import json
+import lark
 import re
 
 # Example:
@@ -38,29 +39,142 @@ EVENT_EXIT_RE = re.compile(r"^\+\+\+ exited with ([0-9]+) \+\+\+$")
 # ([{fd=3<pipe:[41666807]>, events=POLLIN}], 1, 500) = 1 ([{fd=3, revents=POLLIN}])
 SYSCALL_PARSE_PARTS = re.compile(r"^\((.*)\) += (?:([0-9xa-f-]+)(?:<(.+)>)?|(\?))(?: (?:(E[A-Z]+) \(.+\)|\(flags (.+)\)|(\(Timeout\))|\(\[(\{fd=.+\})\]\)))?$")
 
-# Examples:
-# NULL
-# PROT_READ|PROT_WRITE
-# 8192
-# -1
-# 0x7ffdc4c2b5e0
-# "/usr/lib/python3.11/encodings"
-# 3</usr/lib/python3.11/encodings/__pycache__/aliases.cpython-311.pyc>
+# Unhandled examples:
 # [{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}]
 # {st_mode=S_IFREG|0644, st_size=112286, ...}
 # ~[RTMIN RT_1]
-ARG_NEXT_TYPES = [
-    ("bitset", re.compile(r"^([A-Z][A-Z0-9_|]+)(?:, |$)")),
-    ("decimal", re.compile(r"^(-?[0-9]+)(?:, |$)")),
-    ("hexadecimal", re.compile(r"^(0x[0-9a-f]+)(?:, |$)")),
-    ("string", re.compile(r'^("(?:[^"\\]|\\.)*"(?:\.\.\.)?)(?:, |$)')),
-    ("fdstring", re.compile(r'^([0-9]+)<([^<>]+(?:<[^<>]+>)?)>(?:, |$)')),
-    ("fdset", re.compile(r'^(\[\{(?:(?!\}\]).)*\}\])(?:, |$)')),
-    ("struct", re.compile(r'^(\{[^}]+\})(?:, |$)')),
-    ("flagset", re.compile(r'^(~?\[[A-Z0-9_ ]*\])(?:, |$)')),
-    ("dents", re.compile(r'^(0x[0-9a-f]+) /\* ([0-9]+) entries \*/(?:, |$)')),
-]
+ARG_LIST_GRAMMAR = r"""
+    arg_list: (arg (", " arg)*)?
+    arg: identifier -> arg_ident
+        // Example: NULL
+        | identifier ("|" identifier)+ -> arg_bitset
+        // Example: PROT_READ|PROT_WRITE
+        | int_b10 -> arg_int_b10
+        // Example: 8192
+        // Example: -1
+        | uint_b16 -> arg_uint_b16
+        // Example: 0x7ffdc4c2b5e0
+        | "\"" escaped_string "\"" maybe_string_continuation -> arg_string
+        // Example: "/usr/lib/python3.11/encodings"
+        | uint_b10 "<" escaped_path ("<" escaped_path () ">")? ">" -> arg_path
+        // Example: 3</usr/lib/python3.11/encodings/__pycache__/aliases.cpython-311.pyc>
 
+    identifier: /[A-Z][A-Z0-9_]+/ -> token_value
+    int_b10: /0|-?[1-9][0-9]*/
+    uint_b10: /0|[1-9][0-9]*/ -> int_b10
+    uint_b16: /0x[0-9a-f]+/
+    escaped_string: escaped_string_part*
+    escaped_string_part: /[^"\\]/ -> token_value
+        | common_escape -> from_common_escape
+    escaped_path: escaped_path_part* -> escaped_string
+    escaped_path_part: /[^<>"\\]/ -> token_value
+        | common_escape -> from_common_escape
+    common_escape: "\\" /[tnvfr"\\]/ -> escaped_character
+        | "\\" /(0|[1-7][0-7]?)(?![0-7])/ -> numeric_character
+        | "\\" /[0-3][0-7][0-7]/ -> numeric_character
+    maybe_string_continuation: /\.\.\./?
+    """
+
+# Although the language probably is LALR(1), the above grammar is not.
+# The core of the issue seems to revolve around inputs like `1234` and `1234</tmp/foobar>`,
+# and how the grammar rules represent them.
+# TODO: Find a way to make the grammar LALR(1) again!
+ARG_LIST_PARSER = lark.Lark(ARG_LIST_GRAMMAR, start="arg_list")
+
+ESCAPE_CHAR_TO_CHAR = {
+    "t": "\t",
+    "n": "\n",
+    "v": "\v",
+    "f": "\f",
+    "r": "\r",
+    '"': '"',
+    "\\": "\\",
+}
+
+inline_args = lark.v_args(inline=True)
+
+
+class ArgListTransformer(lark.Transformer):
+    arg_list = list
+
+    def prefix(self, args):
+        return len(args)
+
+    @inline_args
+    def arg_ident(self, identifier):
+        return {"type": "identifier", "name": identifier}
+
+    def arg_bitset(self, identifiers):
+        return {"type": "bitset", "values": identifiers}
+
+    @inline_args
+    def arg_int_b10(self, value):
+        return {"type": "int_b10", "value": value}
+
+    @inline_args
+    def arg_uint_b16(self, value):
+        return {"type": "uint_b16", "value": value}
+
+    @inline_args
+    def token_value(self, token):
+        return token.value
+
+    @inline_args
+    def int_b10(self, digits):
+        return int(digits.value)
+
+    @inline_args
+    def uint_b16(self, digits):
+        return int(digits.value, 16)
+
+    def maybe_string_continuation(self, parts):
+        assert parts == [] or parts == ["..."]
+        if parts:
+            return "incomplete"
+        else:
+            return "complete"
+
+    @inline_args
+    def escaped_character(self, char):
+        return ESCAPE_CHAR_TO_CHAR[char.value]
+
+    def escaped_string(self, parts):
+        str_parts = []
+        for i, p in enumerate(parts):
+            if isinstance(p, str):
+                str_parts.append(p)
+            else:
+                print(f"ERROR: part#{i + 1} is not a str: >>{p}<<")
+        return "".join(str_parts)
+
+    @inline_args
+    def numeric_character(self, char):
+        return chr(int(char.value, 8))
+
+    @inline_args
+    def from_common_escape(self, string):
+        return string
+
+    @inline_args
+    def arg_string(self, string, rest):
+        assert rest in ["complete", "incomplete"]
+        return {
+            "type": "string",
+            "value": string,
+            "complete": rest == "complete",
+        }
+
+    @inline_args
+    def arg_path(self, fd, path, metadata=None):
+        return {
+            "type": "fd",
+            "value": fd,
+            "path": path,
+            "metadata": metadata,
+        }
+
+
+TRANSFORMER = ArgListTransformer()
 
 UnfinishedSyscall = namedtuple("UnfinishedSyscall", ["name", "first_part", "start_time"])
 
@@ -143,14 +257,14 @@ class Stats:
             self.log_error(f"ERROR: PID {pid} {syscall_name}{full_args} cannot be parsed?!")
             return
         raw_args, retval_finished, retval_path, retval_unfinished, errno, flags, timeout, pollresult = match.groups()
-        print(f"Begin syscall {syscall_name}")
-        args = self.parse_syscall_args(raw_args)
+        args, args_parsed = self.parse_syscall_args(raw_args)
         self.events[pid].append({
             "type": "syscall",
             "time": timestr,
             "start_time": start_time,
             "syscall_name": syscall_name,
-            "args_RAW_FIXME": raw_args,
+            "args": args,
+            "args_parsed_successfully": args_parsed,
             "retval_finished": retval_finished,
             "retval_path": retval_path,
             "retval_unfinished": retval_unfinished,
@@ -164,34 +278,14 @@ class Stats:
             self.discover_initial_pid(int(retval_finished))
 
     def parse_syscall_args(self, raw_args):
-        args = []
-        while raw_args:
-            next_arg, remaining_str = self.parse_arg(raw_args)
-            if next_arg is None:
-                # Error already reported
-                break
-            args.append(next_arg)
-            raw_args = remaining_str
-        return args
-
-    def parse_arg(self, raw_args):
-        assert raw_args
-        for argtype, argre in ARG_NEXT_TYPES:
-            match = argre.match(raw_args)
-            if match is None:
-                continue
-            arg = {
-                "type": argtype,
-                "content": match.groups(),
-            }
-            print(f"Got arg {arg}")
-            span = match.span()
-            assert span[0] == 0, (argre, raw_args, span)
-            remainder = raw_args[span[1] : ]
-            return arg, remainder
-        print(f"Failed to parse next argument of >>'{raw_args}'<<")
-        self.log_error("Bad args FIXME")
-        return None, None
+        try:
+            arg_list = TRANSFORMER.transform(ARG_LIST_PARSER.parse(raw_args))
+            args_parsed = True
+        except (lark.exceptions.UnexpectedCharacters, lark.exceptions.UnexpectedEOF):
+            arg_list = raw_args
+            args_parsed = False
+            self.log_error(f"ERROR: Cannot parse arglist >>({raw_args})<<")
+        return arg_list, args_parsed
 
     def discover_initial_pid(self, numeric_pid):
         assert self.initial_pid is None
