@@ -4,6 +4,7 @@ from collections import Counter, defaultdict, namedtuple
 import argparse
 import json
 import lark
+import parse_arg
 import re
 
 # Example:
@@ -38,143 +39,6 @@ EVENT_EXIT_RE = re.compile(r"^\+\+\+ exited with ([0-9]+) \+\+\+$")
 # ([{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}], 3, 0) = 0 (Timeout)
 # ([{fd=3<pipe:[41666807]>, events=POLLIN}], 1, 500) = 1 ([{fd=3, revents=POLLIN}])
 SYSCALL_PARSE_PARTS = re.compile(r"^\((.*)\) += (?:([0-9xa-f-]+)(?:<(.+)>)?|(\?))(?: (?:(E[A-Z]+) \(.+\)|\(flags (.+)\)|(\(Timeout\))|\(\[(\{fd=.+\})\]\)))?$")
-
-# Unhandled examples:
-# [{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}]
-# {st_mode=S_IFREG|0644, st_size=112286, ...}
-# ~[RTMIN RT_1]
-ARG_LIST_GRAMMAR = r"""
-    arg_list: (arg (", " arg)*)?
-    arg: identifier -> arg_ident
-        // Example: NULL
-        | identifier ("|" identifier)+ -> arg_bitset
-        // Example: PROT_READ|PROT_WRITE
-        | int_b10 -> arg_int_b10
-        // Example: 8192
-        // Example: -1
-        | uint_b16 -> arg_uint_b16
-        // Example: 0x7ffdc4c2b5e0
-        | "\"" escaped_string "\"" maybe_string_continuation -> arg_string
-        // Example: "/usr/lib/python3.11/encodings"
-        | uint_b10 "<" escaped_path ("<" escaped_path () ">")? ">" -> arg_path
-        // Example: 3</usr/lib/python3.11/encodings/__pycache__/aliases.cpython-311.pyc>
-
-    identifier: /[A-Z][A-Z0-9_]+/ -> token_value
-    int_b10: /0|-?[1-9][0-9]*/
-    uint_b10: /0|[1-9][0-9]*/ -> int_b10
-    uint_b16: /0x[0-9a-f]+/
-    escaped_string: escaped_string_part*
-    escaped_string_part: /[^"\\]/ -> token_value
-        | common_escape -> from_common_escape
-    escaped_path: escaped_path_part* -> escaped_string
-    escaped_path_part: /[^<>"\\]/ -> token_value
-        | common_escape -> from_common_escape
-    common_escape: "\\" /[tnvfr"\\]/ -> escaped_character
-        | "\\" /(0|[1-7][0-7]?)(?![0-7])/ -> numeric_character
-        | "\\" /[0-3][0-7][0-7]/ -> numeric_character
-    maybe_string_continuation: /\.\.\./?
-    """
-
-# Although the language probably is LALR(1), the above grammar is not.
-# The core of the issue seems to revolve around inputs like `1234` and `1234</tmp/foobar>`,
-# and how the grammar rules represent them.
-# TODO: Find a way to make the grammar LALR(1) again!
-ARG_LIST_PARSER = lark.Lark(ARG_LIST_GRAMMAR, start="arg_list")
-
-ESCAPE_CHAR_TO_CHAR = {
-    "t": "\t",
-    "n": "\n",
-    "v": "\v",
-    "f": "\f",
-    "r": "\r",
-    '"': '"',
-    "\\": "\\",
-}
-
-inline_args = lark.v_args(inline=True)
-
-
-class ArgListTransformer(lark.Transformer):
-    arg_list = list
-
-    def prefix(self, args):
-        return len(args)
-
-    @inline_args
-    def arg_ident(self, identifier):
-        return {"type": "identifier", "name": identifier}
-
-    def arg_bitset(self, identifiers):
-        return {"type": "bitset", "values": identifiers}
-
-    @inline_args
-    def arg_int_b10(self, value):
-        return {"type": "int_b10", "value": value}
-
-    @inline_args
-    def arg_uint_b16(self, value):
-        return {"type": "uint_b16", "value": value}
-
-    @inline_args
-    def token_value(self, token):
-        return token.value
-
-    @inline_args
-    def int_b10(self, digits):
-        return int(digits.value)
-
-    @inline_args
-    def uint_b16(self, digits):
-        return int(digits.value, 16)
-
-    def maybe_string_continuation(self, parts):
-        assert parts == [] or parts == ["..."]
-        if parts:
-            return "incomplete"
-        else:
-            return "complete"
-
-    @inline_args
-    def escaped_character(self, char):
-        return ESCAPE_CHAR_TO_CHAR[char.value]
-
-    def escaped_string(self, parts):
-        str_parts = []
-        for i, p in enumerate(parts):
-            if isinstance(p, str):
-                str_parts.append(p)
-            else:
-                print(f"ERROR: part#{i + 1} is not a str: >>{p}<<")
-        return "".join(str_parts)
-
-    @inline_args
-    def numeric_character(self, char):
-        return chr(int(char.value, 8))
-
-    @inline_args
-    def from_common_escape(self, string):
-        return string
-
-    @inline_args
-    def arg_string(self, string, rest):
-        assert rest in ["complete", "incomplete"]
-        return {
-            "type": "string",
-            "value": string,
-            "complete": rest == "complete",
-        }
-
-    @inline_args
-    def arg_path(self, fd, path, metadata=None):
-        return {
-            "type": "fd",
-            "value": fd,
-            "path": path,
-            "metadata": metadata,
-        }
-
-
-TRANSFORMER = ArgListTransformer()
 
 UnfinishedSyscall = namedtuple("UnfinishedSyscall", ["name", "first_part", "start_time"])
 
@@ -279,12 +143,20 @@ class Stats:
 
     def parse_syscall_args(self, raw_args):
         try:
-            arg_list = TRANSFORMER.transform(ARG_LIST_PARSER.parse(raw_args))
+            tree = parse_arg.arg_list_parser.parse(raw_args)
+            arg_list = parse_arg.TRANSFORMER.transform(tree)
             args_parsed = True
-        except (lark.exceptions.UnexpectedCharacters, lark.exceptions.UnexpectedEOF):
+        except lark.exceptions.LarkError:
             arg_list = raw_args
             args_parsed = False
             self.log_error(f"ERROR: Cannot parse arglist >>({raw_args})<<")
+        try:
+            json.dumps(arg_list)
+        except TypeError:
+            print(f"Oops! Leaked Tree/Token instance somewhere in: {raw_args} -> {arg_list}")
+            arg_list = raw_args
+            args_parsed = False
+            self.log_error(f"ERROR???: Cannot parse arglist >>({raw_args})<<")
         return arg_list, args_parsed
 
     def discover_initial_pid(self, numeric_pid):
@@ -354,9 +226,10 @@ def run_with(log_filename, json_filename):
     stats_dict = stats.finish()
     with open(json_filename, "w") as fp:
         json.dump(stats_dict, fp)
-    for error in stats_dict['parse_errors']:
-        print(error)
-    print(f"Finished parsing {sum(len(entries) for entries in stats_dict['events'].values())} events across {len(stats_dict['events'])} processes.")
+    num_events = sum(len(entries) for entries in stats_dict['events'].values())
+    num_processes = len(stats_dict['events'])
+    num_errors = len(stats_dict['parse_errors'])
+    print(f"Finished parsing {num_events} events across {num_processes} processes, with {num_errors} errors.")
 
 
 def run():

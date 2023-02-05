@@ -14,6 +14,10 @@ import lark
 # ("struct", re.compile(r'^(\{[^}]+\})(?:, |$)')),
 # ("flagset", re.compile(r'^(~?\[[A-Z0-9_ ]*\])(?:, |$)')),
 # ("dents", re.compile(r'^(0x[0-9a-f]+) /\* ([0-9]+) entries \*/(?:, |$)')),
+
+# [{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}]
+# {st_mode=S_IFREG|0644, st_size=112286, ...}
+# ~[RTMIN RT_1]
 arg_list_grammar = r"""
     arg_list: (value (", " value)*)?
     ?value: atom
