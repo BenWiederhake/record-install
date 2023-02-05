@@ -73,28 +73,40 @@ EXPECTATIONS = [
     ('[1, 2, 3]', [{"type": "list", "children": [{"type": "int_b10", "value": 1}, {"type": "int_b10", "value": 2}, {"type": "int_b10", "value": 3}]}]),
     ('3<TCPv6:[41664597]>, FIONBIO, [1]', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}, {"type": "identifier", "name": "FIONBIO"}, {"type": "list", "children": [{"type": "int_b10", "value": 1}]}]),
     ('{fd=0</dev/pts/8<char 136:8>>, events=0}', [
-        {"type": "struct", "items": {
+        {"type": "struct", "complete": True, "items": {
             "fd": {"type": "fd", "value": 0, "path": "/dev/pts/8", "metadata": "char 136:8"},
             "events": {"type": "int_b10", "value": 0},
         }},
     ]),
     ('[{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}], 3, 0', [
         {"type": "list", "children": [
-            {"type": "struct", "items": {
+            {"type": "struct", "complete": True, "items": {
                 "fd": {"type": "fd", "value": 0, "path": "/dev/pts/8", "metadata": "char 136:8"},
                 "events": {"type": "int_b10", "value": 0},
             }},
-            {"type": "struct", "items": {
+            {"type": "struct", "complete": True, "items": {
                 "fd": {"type": "fd", "value": 1, "path": "pipe:[41666807]", "metadata": None},
                 "events": {"type": "int_b10", "value": 0},
             }},
-            {"type": "struct", "items": {
+            {"type": "struct", "complete": True, "items": {
                 "fd": {"type": "fd", "value": 2, "path": "pipe:[41666807]", "metadata": None},
                 "events": {"type": "int_b10", "value": 0},
             }},
         ]},
         {"type": "int_b10", "value": 3},
         {"type": "int_b10", "value": 0},
+    ]),
+    ("{st_mode=S_IFDIR|0755, st_size=4096}", [
+        {"type": "struct", "complete": True, "items": {
+            "st_mode": {"type": "bitset", "values": ["S_IFDIR", '0755']},
+            "st_size": {"type": "int_b10", "value": 4096}
+        }},
+    ]),
+    ("{st_mode=S_IFDIR|0755, st_size=4096, ...}", [
+        {"type": "struct", "complete": False, "items": {
+            "st_mode": {"type": "bitset", "values": ["S_IFDIR", '0755']},
+            "st_size": {"type": "int_b10", "value": 4096}
+        }},
     ]),
 ]
 

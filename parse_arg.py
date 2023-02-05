@@ -22,7 +22,7 @@ arg_list_grammar = r"""
     arg_list: (value (", " value)*)?
     ?value: atom
     ?atom: "[" value (", " value)* "]"        -> list
-         | "{" key_value (", " key_value)* "}" -> struct
+         | "{" key_value (", " key_value)* [", " complete] "}" -> struct
          | ID ("|" ID)+                       -> bitset
          | ID                                 -> identifier
          | FD_START FD_MAIN [FD_META] ">"     -> fd
@@ -31,12 +31,12 @@ arg_list_grammar = r"""
          | STRING [complete]                  -> string
     complete: "..."
     key_value: ID "=" value
-    ID: /[A-Za-z0-9_]+/
-    FD_START.1: /\d+</
+    ID: /(?!0x)[A-Za-z0-9_]+/
+    FD_START.2: /\d+</
     FD_MAIN: /[^<>]+/
     FD_META: /<[^>]*>/
     HEX_NUMBER: /0x[\dA-Fa-f]+(?!\w)/
-    DEC_NUMBER: /-?(0(?!x)|[1-9][0-9]*)(?!x)/ // \d+(?!\w)
+    DEC_NUMBER.1: /-?(0(?!x)|[1-9][0-9]*)(?!x)/ // \d+(?!\w)
     STRING: /"([^\\\\"]|\\.)*"/
 """
 
@@ -117,13 +117,15 @@ class ArgListTransformer(lark.Transformer):
     def key_value(self, key, value):
         return (key.value, value)
 
-    def struct(self, *pairs):
+    def struct(self, *pairs_and_complete_marker):
+        pairs = pairs_and_complete_marker[:-1]
+        complete_marker = pairs_and_complete_marker[-1]
         struct_dict = dict()
         for key, value in pairs:
             if key in struct_dict:
                 raise EscapeError(f"Duplicate key {key!r}?!")
             struct_dict[key] = value
-        return {"type": "struct", "items": struct_dict}
+        return {"type": "struct", "complete": complete_marker is None, "items": struct_dict}
 
 
 lark.logger.setLevel(logging.DEBUG)
