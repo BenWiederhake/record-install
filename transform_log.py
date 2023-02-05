@@ -38,6 +38,29 @@ EVENT_EXIT_RE = re.compile(r"^\+\+\+ exited with ([0-9]+) \+\+\+$")
 # ([{fd=3<pipe:[41666807]>, events=POLLIN}], 1, 500) = 1 ([{fd=3, revents=POLLIN}])
 SYSCALL_PARSE_PARTS = re.compile(r"^\((.*)\) += (?:([0-9xa-f-]+)(?:<(.+)>)?|(\?))(?: (?:(E[A-Z]+) \(.+\)|\(flags (.+)\)|(\(Timeout\))|\(\[(\{fd=.+\})\]\)))?$")
 
+# Examples:
+# NULL
+# PROT_READ|PROT_WRITE
+# 8192
+# -1
+# 0x7ffdc4c2b5e0
+# "/usr/lib/python3.11/encodings"
+# 3</usr/lib/python3.11/encodings/__pycache__/aliases.cpython-311.pyc>
+# [{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}]
+# {st_mode=S_IFREG|0644, st_size=112286, ...}
+# ~[RTMIN RT_1]
+ARG_NEXT_TYPES = [
+    ("bitset", re.compile(r"^([A-Z][A-Z0-9_|]+)(?:, |$)")),
+    ("decimal", re.compile(r"^(-?[0-9]+)(?:, |$)")),
+    ("hexadecimal", re.compile(r"^(0x[0-9a-f]+)(?:, |$)")),
+    ("string", re.compile(r'^("(?:[^"\\]|\\.)*"(?:\.\.\.)?)(?:, |$)')),
+    ("fdstring", re.compile(r'^([0-9]+)<([^<>]+(?:<[^<>]+>)?)>(?:, |$)')),
+    ("fdset", re.compile(r'^(\[\{(?:(?!\}\]).)*\}\])(?:, |$)')),
+    ("struct", re.compile(r'^(\{[^}]+\})(?:, |$)')),
+    ("flagset", re.compile(r'^(~?\[[A-Z0-9_ ]*\])(?:, |$)')),
+    ("dents", re.compile(r'^(0x[0-9a-f]+) /\* ([0-9]+) entries \*/(?:, |$)')),
+]
+
 
 UnfinishedSyscall = namedtuple("UnfinishedSyscall", ["name", "first_part", "start_time"])
 
@@ -120,6 +143,8 @@ class Stats:
             self.log_error(f"ERROR: PID {pid} {syscall_name}{full_args} cannot be parsed?!")
             return
         raw_args, retval_finished, retval_path, retval_unfinished, errno, flags, timeout, pollresult = match.groups()
+        print(f"Begin syscall {syscall_name}")
+        args = self.parse_syscall_args(raw_args)
         self.events[pid].append({
             "type": "syscall",
             "time": timestr,
@@ -137,6 +162,36 @@ class Stats:
         if syscall_name == "getpid" and pid == "initial":
             assert retval_finished is not None
             self.discover_initial_pid(int(retval_finished))
+
+    def parse_syscall_args(self, raw_args):
+        args = []
+        while raw_args:
+            next_arg, remaining_str = self.parse_arg(raw_args)
+            if next_arg is None:
+                # Error already reported
+                break
+            args.append(next_arg)
+            raw_args = remaining_str
+        return args
+
+    def parse_arg(self, raw_args):
+        assert raw_args
+        for argtype, argre in ARG_NEXT_TYPES:
+            match = argre.match(raw_args)
+            if match is None:
+                continue
+            arg = {
+                "type": argtype,
+                "content": match.groups(),
+            }
+            print(f"Got arg {arg}")
+            span = match.span()
+            assert span[0] == 0, (argre, raw_args, span)
+            remainder = raw_args[span[1] : ]
+            return arg, remainder
+        print(f"Failed to parse next argument of >>'{raw_args}'<<")
+        self.log_error("Bad args FIXME")
+        return None, None
 
     def discover_initial_pid(self, numeric_pid):
         assert self.initial_pid is None
