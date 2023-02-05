@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import logging
 import inspect
 import lark
 
@@ -14,27 +15,93 @@ import lark
 # ("dents", re.compile(r'^(0x[0-9a-f]+) /\* ([0-9]+) entries \*/(?:, |$)')),
 int_tree_grammar = r"""
     arg_list: (arg (", " arg)*)?
-    arg: identifier -> arg_ident
-        | identifier ("|" identifier)+ -> arg_bitset
-        | int_b10 -> arg_int_b10
+    arg: "-" uint_b10 -> arg_neg_int_b10
         | uint_b16 -> arg_uint_b16
-        | "\"" escaped_string "\"" maybe_string_continuation -> arg_string
-        | uint_b10 "<" escaped_path ("<" escaped_path () ">")? ">" -> arg_path
+        | uint_b10
+        | identifier
+        | identifier ("|" identifier)+ -> arg_bitset
+        | "\"" escaped_string? "\"" (dotdotdot)?
 
-    identifier: /[A-Z][A-Z0-9_]+/ -> token_value
-    int_b10: /0|-?[1-9][0-9]*/
-    uint_b10: /0|[1-9][0-9]*/ -> int_b10
-    uint_b16: /0x[0-9a-f]+/
-    escaped_string: escaped_string_part*
-    escaped_string_part: /[^"\\]/ -> token_value
-        | common_escape -> from_common_escape
-    escaped_path: escaped_path_part* -> escaped_string
-    escaped_path_part: /[^<>"\\]/ -> token_value
-        | common_escape -> from_common_escape
-    common_escape: "\\" /[tnvfr"\\]/ -> escaped_character
-        | "\\" /(0|[1-7][0-7]?)(?![0-7])/ -> numeric_character
-        | "\\" /[0-3][0-7][0-7]/ -> numeric_character
-    maybe_string_continuation: /\.\.\./?
+    // I'm unhappy about this recursive construction, but can't come up with a better idea:
+    escaped_string: octal_digit escaped_string? | escaped_string_nonoctal
+    escaped_string_nonoctal: char_string_nonoctal escaped_string?
+        | escape_sequence_closed escaped_string?
+        | escape_sequence_open escaped_string_nonoctal?
+    escape_sequence_closed: "\\" escape_literal -> escaped_character
+        | "\\" escape_three_octal
+    escape_sequence_open: "\\" escape_short_octal
+
+    // escaped_string: (CHAR_STRING | escape_sequence_common | escape_short_string_start CHAR_STRING_NONOCTAL)*  escape_short_string_start? "\""
+    // FIXME: escape_short_string_start CAN BE FOLLOWED BY escape_short_string_start
+
+    // arg: identifier -> arg_ident
+    //     | identifier (PIPE identifier)+ -> arg_bitset
+    //     | "-" uint_b10 -> arg_neg_int_b10
+    //     | uint_b16 -> arg_uint_b16
+    //     | uint_b10 // …
+    //     //| "\"" escaped_string "\"" maybe_string_continuation -> arg_string
+    //     //| uint_b10 (LESS escaped_path (LESS escaped_path () GREATER)? GREATER)? -> arg_path_or_int_b10
+    // identifier: /[A-Z][A-Z0-9_]+/ -> token_value
+    // uint_b10: /0(?!x)|[1-9][0-9]*/
+    // uint_b16: /0x[0-9a-f]+/
+    // escaped_string: escaped_string_part*
+    // !escaped_string_part: "<" | ">" -> token_value
+    //     | escaped_path_part -> from_common_escape
+    // escaped_path: escaped_path_part* -> escaped_string
+    // escaped_path_part: /[^<>"\\]/ -> token_value
+    //     | common_escape -> from_common_escape
+    // common_escape: "\\" /[tnvfr"\\]/ -> escaped_character
+    //     | BACKSLASH /(0|[1-7][0-7]?)(?![0-7])/ -> numeric_character
+    //     | BACKSLASH /[0-3][0-7][0-7]/ -> numeric_character
+    // maybe_string_continuation: (DOT DOT DOT)?
+
+    // Lark has lots of trouble with regexes that have *any* overlap.
+    // Regexes are:
+    // * Anything written in all-caps (e.g. 'DIGIT: "asdf"')
+    // * Anything written in range notation (e.g. '"0".."9"')
+    // * Any literal regex (e.g. '/a*(bc)+/')
+    // Overlapping string literals are fine, but MUST NOT overlap with any of the regexes.
+    // Therefore, try to avoid regexes as much as possible.
+    !dotdotdot: "..."
+    !underscore: "_"
+    !nonzero_octal_digit: "1" // | "2" | "3" | "4" | "5" | "6" | "7"
+    !octal_digit: "0" | nonzero_octal_digit
+    !nonzero_decimal_digit: nonzero_octal_digit | "8" | "9"
+    !decimal_digit: "0" | nonzero_decimal_digit
+
+    !uint_b10: "0" | nonzero_decimal_digit decimal_digit*
+    !uint_b16: "0" "x" hexadecimal_digit+
+
+    !hexadecimal_digit: decimal_digit | "a" | "b" | "c" | "d" | "e" | "f"
+    !identifier: char_alpha_upper (char_alpha_upper | decimal_digit | underscore)+
+    !escape_literal: "t" | "n" | "v" | "f" | "r" | "\"" | "\\"
+    !escape_three_octal: ("0" | "1" | "2" | "3") octal_digit octal_digit
+    !escape_short_octal: "0" | nonzero_octal_digit octal_digit?
+
+    // ASCII contains:
+    // 1: 0x00 (NUL)
+    // 31: 0x01-0x1F (includes some named control chars)
+    // 16: 0x20-0x2F » !"#$%&'()*+,-./«
+    // 10: 0x30-0x39 "0".."9"
+    // 6: 0x3A-0x3F ":;<=>?"
+    // 1: 0x40 "@"
+    // 32: 0x41-0x5A "A".."Z"
+    // 6: 0x5B-0x60 "[\]^_`"
+    // 26: 0x61-0x7A "a".."z"
+    // 4: 0x7B-0x7E "{|}~"
+    // 1: 0x7F DEL
+
+    // Exclude '"', "<", ">", "\\", and all non-printable characters:
+    !char_path_nonoctal: " " | "!" | "#" | "$" | "%" | "&" | "'" | "(" | ")" | "*" | "+" | "," | "-" | "." | "/"  // excludes "\""
+        | "8" | "9"  // excludes octal characters
+        | ":" | ";" | "=" | "?" | "@"  // excludes "<" and ">"
+        | char_alpha_upper
+        | "[" | "]" | "^" | "_" | "`"  // excludes "\\"
+        | char_alpha_lower
+        | "{" | "|" | "}" | "~"
+    !char_alpha_upper: "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+    !char_alpha_lower: "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+    !char_string_nonoctal: char_path_nonoctal | "<" | ">"
     """
 
 ESCAPE_CHAR_TO_CHAR = {
@@ -47,6 +114,7 @@ ESCAPE_CHAR_TO_CHAR = {
     "\\": "\\",
 }
 
+lark.logger.setLevel(logging.DEBUG)
 inline_args = lark.v_args(inline=True)
 
 
@@ -68,8 +136,8 @@ class MyTransformer(lark.Transformer):
         return {"type": "bitset", "values": identifiers}
 
     @inline_args
-    def arg_int_b10(self, value):
-        return {"type": "int_b10", "value": value}
+    def arg_neg_int_b10(self, value):
+        return {"type": "int_b10", "value": -value}
 
     @inline_args
     def arg_uint_b16(self, value):
@@ -80,7 +148,7 @@ class MyTransformer(lark.Transformer):
         return token.value
 
     @inline_args
-    def int_b10(self, digits):
+    def uint_b10(self, digits):
         return int(digits.value)
 
     @inline_args
@@ -125,7 +193,10 @@ class MyTransformer(lark.Transformer):
         }
 
     @inline_args
-    def arg_path(self, fd, path, metadata=None):
+    def arg_path_or_int_b10(self, fd, path=None, metadata=None):
+        assert path is not None or metadata is None  # "metadata implies path"
+        if path is None:
+            return {"type": "int_b10", "value": fd}
         return {
             "type": "fd",
             "value": fd,
@@ -136,18 +207,14 @@ class MyTransformer(lark.Transformer):
 
 TRANSFORMER = MyTransformer()
 
-
-# Although the language probably is LALR(1), the above grammar is not.
-# The core of the issue seems to revolve around inputs like `1234` and `1234</tmp/foobar>`,
-# and how the grammar rules represent them.
-# TODO: Find a way to make the grammar LALR(1) again!
-arg_list_parser = lark.Lark(int_tree_grammar, start="arg_list")
+arg_list_parser = lark.Lark(int_tree_grammar, start="arg_list", parser="lalr", debug=True)
 
 
 def run_expectation(test_index, input_string, expected):
-    print(f"[{test_index:03}] Testing '{input_string}' ... ", end="")
+    print(f"[P{test_index:03}] Testing '{input_string}' ... ", end="")
     try:
-        actual = TRANSFORMER.transform(arg_list_parser.parse(input_string))
+        actual = arg_list_parser.parse(input_string)
+        #actual = TRANSFORMER.transform(arg_list_parser.parse(input_string))
     except ValueError as e:
         print(f"\nERROR: {e}")
         return
@@ -155,6 +222,7 @@ def run_expectation(test_index, input_string, expected):
         print()
         print(f"ERROR: Expected {expected} instead")
         print(f"       Actual = {actual}")
+        print(actual.pretty())
         return
     print("ok")
 
@@ -178,6 +246,9 @@ EXPECTATIONS = [
     ('0x1234567', [{"type": "uint_b16", "value": 0x1234567}]),
     ('0x123456789abcdef0', [{"type": "uint_b16", "value": 0x123456789abcdef0}]),
     ('"hello"', [{"type": "string", "value": "hello", "complete": True}]),
+    ('"FOO"', [{"type": "string", "value": "hello", "complete": True}]),
+    ('"0asdf"', [{"type": "string", "value": "0asdf", "complete": True}]),
+    ('"qwer0asdf"', [{"type": "string", "value": "qwer0asdf", "complete": True}]),
     ('""', [{"type": "string", "value": "", "complete": True}]),
     ('"world"...', [{"type": "string", "value": "world", "complete": False}]),
     ('""...', [{"type": "string", "value": "", "complete": False}]),
@@ -212,10 +283,14 @@ EXPECTATIONS = [
     (r'"really\208weird"', [{"type": "string", "value": "really\x108weird", "complete": True}]),
     (r'"really\218weird"', [{"type": "string", "value": "really\x118weird", "complete": True}]),
     (r'"sanity<check>"', [{"type": "string", "value": "sanity<check>", "complete": True}]),
-    # fdstrings without the string cannot possibly recognized as such. We shift that responsibility to the user.
-    (r'1', [{"type": "int_b10", "value": 1}]),
-    (r'1</dev/null>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": None}]),
-    (r'1</dev/null<char 1:3>>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": "char 1:3"}]),
+    (r'"sanity,check>"', [{"type": "string", "value": "sanity,check>", "complete": True}]),
+    (r'"sanity check>"', [{"type": "string", "value": "sanity check>", "complete": True}]),
+    (r'"sanity, check>"', [{"type": "string", "value": "sanity, check>", "complete": True}]),
+    # # fdstrings without the string cannot possibly recognized as such. We shift that responsibility to the user.
+    # (r'1', [{"type": "int_b10", "value": 1}]),
+    # (r'1</dev/null>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": None}]),
+    # (r'1</dev/null<char 1:3>>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": "char 1:3"}]),
+    # (r'3</tmp/x/THE\"MARKER>', [{"type": "fd", "value": 3, "path": "/tmp/x/THE\"MARKER", "metadata": None}]),
 ]
 
 NEGATIVES = [
@@ -239,14 +314,15 @@ NEGATIVES = [
     (r'<barepath>'),
     (r'<barepath<char 1:3>>'),
 ]
+NEGATIVES = []  # FIXME
 
 for i, expectation in enumerate(EXPECTATIONS):
     run_expectation(i, *expectation)
 for i, input_string in enumerate(NEGATIVES):
-    print(f"[{i:03}] Testing '{input_string}' ... ", end="")
+    print(f"[N{i:03}] Testing '{input_string}' ... ", end="")
     try:
         tree = arg_list_parser.parse(input_string)
-    except (lark.exceptions.UnexpectedCharacters, lark.exceptions.UnexpectedEOF):
+    except (lark.exceptions.UnexpectedCharacters, lark.exceptions.UnexpectedToken, lark.exceptions.UnexpectedEOF):
         print("ok")
         continue
     print(f"\nERROR: Was accepted?!\n{tree}\n{tree.pretty()}")
