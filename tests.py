@@ -68,6 +68,34 @@ EXPECTATIONS = [
     (r'1</dev/null>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": None}]),
     (r'1</dev/null<char 1:3>>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": "char 1:3"}]),
     (r'3</tmp/x/THE\"MARKER>', [{"type": "fd", "value": 3, "path": "/tmp/x/THE\"MARKER", "metadata": None}]),
+    ('3<TCPv6:[41664597]>', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}]),
+    ('[1]', [{"type": "list", "children": [{"type": "int_b10", "value": 1}]}]),
+    ('[1, 2, 3]', [{"type": "list", "children": [{"type": "int_b10", "value": 1}, {"type": "int_b10", "value": 2}, {"type": "int_b10", "value": 3}]}]),
+    ('3<TCPv6:[41664597]>, FIONBIO, [1]', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}, {"type": "identifier", "name": "FIONBIO"}, {"type": "list", "children": [{"type": "int_b10", "value": 1}]}]),
+    ('{fd=0</dev/pts/8<char 136:8>>, events=0}', [
+        {"type": "struct", "items": {
+            "fd": {"type": "fd", "value": 0, "path": "/dev/pts/8", "metadata": "char 136:8"},
+            "events": {"type": "int_b10", "value": 0},
+        }},
+    ]),
+    ('[{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}], 3, 0', [
+        {"type": "list", "children": [
+            {"type": "struct", "items": {
+                "fd": {"type": "fd", "value": 0, "path": "/dev/pts/8", "metadata": "char 136:8"},
+                "events": {"type": "int_b10", "value": 0},
+            }},
+            {"type": "struct", "items": {
+                "fd": {"type": "fd", "value": 1, "path": "pipe:[41666807]", "metadata": None},
+                "events": {"type": "int_b10", "value": 0},
+            }},
+            {"type": "struct", "items": {
+                "fd": {"type": "fd", "value": 2, "path": "pipe:[41666807]", "metadata": None},
+                "events": {"type": "int_b10", "value": 0},
+            }},
+        ]},
+        {"type": "int_b10", "value": 3},
+        {"type": "int_b10", "value": 0},
+    ]),
 ]
 
 NEGATIVES = [

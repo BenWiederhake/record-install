@@ -21,9 +21,8 @@ import lark
 arg_list_grammar = r"""
     arg_list: (value (", " value)*)?
     ?value: atom
-    ?atom: "(" value ("," value)* ")"         -> tuple
-         | "[" value ("," value)* "]"         -> list
-         | "{" key_value ("," key_value)* "}" -> dict
+    ?atom: "[" value (", " value)* "]"        -> list
+         | "{" key_value (", " key_value)* "}" -> struct
          | ID ("|" ID)+                       -> bitset
          | ID                                 -> identifier
          | FD_START FD_MAIN [FD_META] ">"     -> fd
@@ -32,7 +31,7 @@ arg_list_grammar = r"""
          | STRING [complete]                  -> string
     complete: "..."
     key_value: ID "=" value
-    ID: /[A-Z0-9_]+/
+    ID: /[A-Za-z0-9_]+/
     FD_START.1: /\d+</
     FD_MAIN: /[^<>]+/
     FD_META: /<[^>]*>/
@@ -111,6 +110,20 @@ class ArgListTransformer(lark.Transformer):
     def fd(self, start, main, meta):
         return {"type": "fd", "value": int(start[:-1]), "path": self.STRING('"' + main + '"'),
                 "metadata": None if meta is None else meta[1:-1]}
+
+    def list(self, *children):
+        return {"type": "list", "children": list(children)}
+
+    def key_value(self, key, value):
+        return (key.value, value)
+
+    def struct(self, *pairs):
+        struct_dict = dict()
+        for key, value in pairs:
+            if key in struct_dict:
+                raise EscapeError(f"Duplicate key {key!r}?!")
+            struct_dict[key] = value
+        return {"type": "struct", "items": struct_dict}
 
 
 lark.logger.setLevel(logging.DEBUG)
