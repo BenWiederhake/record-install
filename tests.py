@@ -108,6 +108,7 @@ EXPECTATIONS = [
             "st_size": {"type": "int_b10", "value": 4096}
         }},
     ]),
+    (r'"TZif2\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\t\0\0\0\t\0\0\0\0"...', [{"type": "string", "value": "TZif2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00\t\x00\x00\x00\x00", "complete": False}]),
 ]
 
 NEGATIVES = [

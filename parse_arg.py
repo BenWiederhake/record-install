@@ -84,11 +84,11 @@ class ArgListTransformer(lark.Transformer):
         while i < len(token):
             if token[i] == "\\":
                 i += 1
-                if token[i] in OCTAL_DIGITS:
+                if len(token) > i and token[i] in OCTAL_DIGITS:
                     l = 1
-                    if token[i + 1] in OCTAL_DIGITS:
+                    if len(token) > i + 1 and token[i + 1] in OCTAL_DIGITS:
                         l += 1
-                        if token[i + 2] in OCTAL_DIGITS:
+                        if len(token) > i + 2 and token[i + 2] in OCTAL_DIGITS:
                             l += 1
                         elif token[i] == "0":
                             raise EscapeError(f"Invalid octal code {token[i : i+3]!r}")

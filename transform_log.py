@@ -156,7 +156,7 @@ class Stats:
             print(f"Oops! Leaked Tree/Token instance somewhere in: {raw_args} -> {arg_list}")
             arg_list = raw_args
             args_parsed = False
-            self.log_error(f"ERROR???: Cannot parse arglist >>({raw_args})<<")
+            self.log_error(f"ERROR: Cannot JSON-encode arglist >>({raw_args})<<")
         return arg_list, args_parsed
 
     def discover_initial_pid(self, numeric_pid):
