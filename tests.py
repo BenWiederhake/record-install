@@ -127,6 +127,7 @@ EXPECTATIONS = [
         {"type": "int_b10", "value": 0},
         {"type": "identifier", "name": "NULL"},
     ]),
+    ("child_stack=NULL", [{"type": "named_arg", "name": "child_stack", "value": {"type": "identifier", "name": "NULL"}}]),
 ]
 
 NEGATIVES = [

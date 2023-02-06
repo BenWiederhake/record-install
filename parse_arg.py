@@ -8,6 +8,7 @@ import lark
 arg_list_grammar = r"""
     arg_list: (value (", " value)*)?
     ?value: atom
+        | ID "=" atom                         -> named_argument
     ?atom: "[" (value (", " value)*)? "]"        -> list
          | "{" key_value (", " key_value)* [", " complete] "}" -> struct
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
@@ -137,6 +138,10 @@ class ArgListTransformer(lark.Transformer):
 
     def exit_status(self, exit_code):
         return {"type": "exit_status", "value": int(exit_code)}
+
+    def named_argument(self, arg_name, value):
+        return {"type": "named_arg", "name": arg_name.value, "value": value}
+
 
 
 lark.logger.setLevel(logging.DEBUG)
