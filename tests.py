@@ -128,6 +128,8 @@ EXPECTATIONS = [
         {"type": "identifier", "name": "NULL"},
     ]),
     ("child_stack=NULL", [{"type": "named_arg", "name": "child_stack", "value": {"type": "identifier", "name": "NULL"}}]),
+    ("{B38400 opost}", [{"type": "ioctl_set", "values": ["B38400", "opost"], "complete": True}]),
+    ("{B38400 opost isig icanon echo ...}", [{"type": "ioctl_set", "values": ["B38400", "opost", "isig", "icanon", "echo"], "complete": False}]),
 ]
 
 NEGATIVES = [

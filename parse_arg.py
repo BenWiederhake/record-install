@@ -11,6 +11,7 @@ arg_list_grammar = r"""
         | ID "=" atom                         -> named_argument
     ?atom: "[" (value (", " value)*)? "]"        -> list
          | "{" key_value (", " key_value)* [", " complete] "}" -> struct
+         | "{" (ID (" " ID)*)? [" " complete] "}" -> ioctl_set
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
          | ID                                 -> identifier
@@ -142,6 +143,11 @@ class ArgListTransformer(lark.Transformer):
     def named_argument(self, arg_name, value):
         return {"type": "named_arg", "name": arg_name.value, "value": value}
 
+    def ioctl_set(self, *ioctls_and_complete_marker):
+        ioctls = ioctls_and_complete_marker[:-1]
+        ioctls = [e.value for e in ioctls]
+        complete_marker = ioctls_and_complete_marker[-1]
+        return {"type": "ioctl_set", "complete": complete_marker is None, "values": ioctls}
 
 
 lark.logger.setLevel(logging.DEBUG)
