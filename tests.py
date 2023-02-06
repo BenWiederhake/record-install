@@ -109,6 +109,9 @@ EXPECTATIONS = [
         }},
     ]),
     (r'"TZif2\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\t\0\0\0\t\0\0\0\0"...', [{"type": "string", "value": "TZif2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00\t\x00\x00\x00\x00", "complete": False}]),
+    ('0x1d2b4b0 /* 209 entries */', [{"type": "uint_b16", "value": 0x1d2b4b0, "num": 209, "unit": "entries"}]),
+    ('0x7fff3018edb8 /* 45 vars */', [{"type": "uint_b16", "value": 0x7fff3018edb8, "num": 45, "unit": "vars"}]),
+    ('[]', [{"type": "list", "children": []}]),
 ]
 
 NEGATIVES = [
