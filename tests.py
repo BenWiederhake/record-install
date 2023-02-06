@@ -114,6 +114,8 @@ EXPECTATIONS = [
     ('[]', [{"type": "list", "children": []}]),
     ('8192*1024', [{"type": "int_b10", "value": 8192, "factor": 1024}]),
     ("~[RTMIN RT_1]", [{"type": "bitset2", "values": ["RTMIN", "RT_1"]}]),
+    ("0123", [{"type": "uint_b8", "value": 0o123}]),
+    ("0777", [{"type": "uint_b8", "value": 0o777}]),
 ]
 
 NEGATIVES = [
@@ -127,7 +129,6 @@ NEGATIVES = [
     '+7',
     '-0x123',
     '-3</tmp/foo>',
-    '0123',
     '1234a',
     '"hello\\"',
     "'hello'",

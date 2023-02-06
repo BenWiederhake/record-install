@@ -10,21 +10,23 @@ arg_list_grammar = r"""
     ?value: atom
     ?atom: "[" (value (", " value)*)? "]"        -> list
          | "{" key_value (", " key_value)* [", " complete] "}" -> struct
-         | ID ("|" ID)+                       -> bitset
+         | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
          | ID                                 -> identifier
          | FD_START FD_MAIN [FD_META] ">"     -> fd
+         | OCT_NUMBER                         -> oct_number
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
          | HEX_NUMBER [" /* " DEC_NUMBER " " ID " */"] -> hex_number
          | STRING [complete]                  -> string
     complete: "..."
     key_value: ID "=" value
-    ID: /(?!0x)[A-Za-z0-9_]+/
+    ID: /(?!0[x<0-9])[A-Za-z0-9_]+/
     FD_START.2: /\d+</
     FD_MAIN: /[^<>]+/
     FD_META: /<[^>]*>/
     HEX_NUMBER: /0x[\dA-Fa-f]+(?!\w)/
-    DEC_NUMBER.1: /-?(0(?!x)|[1-9][0-9]*)(?!x)/ // \d+(?!\w)
+    DEC_NUMBER.1: /-?(0(?![x<0-9])|[1-9][0-9]*)(?!x0-9)/
+    OCT_NUMBER: /0([0-7]+)(?!0-9)/
     STRING: /"([^\\\\"]|\\.)*"/
 """
 
@@ -61,6 +63,9 @@ class ArgListTransformer(lark.Transformer):
 
     def bitset2(self, *values):
         return {"type": "bitset2", "values": [v.value for v in values]}
+
+    def oct_number(self, value):
+        return {"type": "uint_b8", "value": int(value, 8)}
 
     def dec_number(self, value, factor):
         if factor is not None:
