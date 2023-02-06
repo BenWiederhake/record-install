@@ -15,6 +15,7 @@ arg_list_grammar = r"""
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
          | ID                                 -> identifier
+         | "&" ID                             -> reference
          | ID "(" (value (", " value)*)? ")"  -> call
          | FD_START FD_MAIN [">" FD_MAIN] (FD_META | ">")     -> fd
          | OCT_NUMBER                         -> oct_number
@@ -61,6 +62,9 @@ class ArgListTransformer(lark.Transformer):
 
     def identifier(self, name):
         return {"type": "identifier", "name": name.value}
+
+    def reference(self, name):
+        return {"type": "reference", "name": name.value}
 
     def bitset(self, *values):
         return {"type": "bitset", "values": [v.value for v in values]}
