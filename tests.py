@@ -113,6 +113,7 @@ EXPECTATIONS = [
     ('0x7fff3018edb8 /* 45 vars */', [{"type": "uint_b16", "value": 0x7fff3018edb8, "num": 45, "unit": "vars"}]),
     ('[]', [{"type": "list", "children": []}]),
     ('8192*1024', [{"type": "int_b10", "value": 8192, "factor": 1024}]),
+    ("~[RTMIN RT_1]", [{"type": "bitset2", "values": ["RTMIN", "RT_1"]}]),
 ]
 
 NEGATIVES = [

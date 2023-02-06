@@ -5,25 +5,13 @@ import logging
 import inspect
 import lark
 
-# # ("bitset", re.compile(r"^([A-Z][A-Z0-9_|]+)(?:, |$)")),
-# # ("decimal", re.compile(r"^(-?[0-9]+)(?:, |$)")),
-# # ("hexadecimal", re.compile(r"^(0x[0-9a-f]+)(?:, |$)")),
-# # ("string", re.compile(r'^("(?:[^"\\]|\\.)*"(?:\.\.\.)?)(?:, |$)')),
-# # ("fdstring", re.compile(r'^([0-9]+)<([^<>]+(?:<[^<>]+>)?)>(?:, |$)')),
-# ("fdset", re.compile(r'^(\[\{(?:(?!\}\]).)*\}\])(?:, |$)')),
-# ("struct", re.compile(r'^(\{[^}]+\})(?:, |$)')),
-# ("flagset", re.compile(r'^(~?\[[A-Z0-9_ ]*\])(?:, |$)')),
-# ("dents", re.compile(r'^(0x[0-9a-f]+) /\* ([0-9]+) entries \*/(?:, |$)')),
-
-# [{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}]
-# {st_mode=S_IFREG|0644, st_size=112286, ...}
-# ~[RTMIN RT_1]
 arg_list_grammar = r"""
     arg_list: (value (", " value)*)?
     ?value: atom
     ?atom: "[" (value (", " value)*)? "]"        -> list
          | "{" key_value (", " key_value)* [", " complete] "}" -> struct
          | ID ("|" ID)+                       -> bitset
+         | "~[" (ID (" " ID)*)? "]"           -> bitset2
          | ID                                 -> identifier
          | FD_START FD_MAIN [FD_META] ">"     -> fd
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
@@ -70,6 +58,9 @@ class ArgListTransformer(lark.Transformer):
 
     def bitset(self, *values):
         return {"type": "bitset", "values": [v.value for v in values]}
+
+    def bitset2(self, *values):
+        return {"type": "bitset2", "values": [v.value for v in values]}
 
     def dec_number(self, value, factor):
         if factor is not None:
