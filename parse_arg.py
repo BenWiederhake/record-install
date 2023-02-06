@@ -13,6 +13,7 @@ arg_list_grammar = r"""
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
          | ID                                 -> identifier
+         | ID "(" (value (", " value)*)? ")"  -> call
          | FD_START FD_MAIN [">" FD_MAIN] (FD_META | ">")     -> fd
          | OCT_NUMBER                         -> oct_number
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
@@ -129,6 +130,9 @@ class ArgListTransformer(lark.Transformer):
                 raise EscapeError(f"Duplicate key {key!r}?!")
             struct_dict[key] = value
         return {"type": "struct", "complete": complete_marker is None, "items": struct_dict}
+
+    def call(self, fn_name, *args):
+        return {"type": "call", "function": fn_name, "args": list(args)}
 
 
 lark.logger.setLevel(logging.DEBUG)

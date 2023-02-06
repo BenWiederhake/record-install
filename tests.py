@@ -117,6 +117,10 @@ EXPECTATIONS = [
     ("0123", [{"type": "uint_b8", "value": 0o123}]),
     ("0777", [{"type": "uint_b8", "value": 0o777}]),
     ("3<UDPv6:[[2a02:1234:1234:1234:1234:1234:1234:abcd]:60696->[2a04:1234:1234::1234]:443]>", [{"type": "fd", "value": 3, "path": "UDPv6:[[2a02:1234:1234:1234:1234:1234:1234:abcd]:60696->[2a04:1234:1234::1234]:443]", "metadata": None}]),
+    ("htons(443)", [{"type": "call", "function": "htons", "args": [{"type": "int_b10", "value": 443}]}]),
+    ("htonl(0)", [{"type": "call", "function": "htonl", "args": [{"type": "int_b10", "value": 0}]}]),
+    ('if_nametoindex("enp2s0")', [{"type": "call", "function": "if_nametoindex", "args": [{"type": "string", "value": "enp2s0", "complete": True}]}]),
+    ('makedev(0x88, 0x8)', [{"type": "call", "function": "makedev", "args": [{"type": "uint_b16", "value": 0x88}, {"type": "uint_b16", "value": 0x8}]}]),
 ]
 
 NEGATIVES = [
