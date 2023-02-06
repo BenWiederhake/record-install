@@ -91,8 +91,8 @@ EXPECTATIONS = [
         ]},
     ]),
     (r'"TZif2\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\t\0\0\0\t\0\0\0\0"...', [{"type": "string", "value": "TZif2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00\t\x00\x00\x00\x00", "complete": False}]),
-    ('0x1d2b4b0 /* 209 entries */', [{"type": "uint_b16", "value": 0x1d2b4b0, "num": 209, "unit": "entries"}]),
-    ('0x7fff3018edb8 /* 45 vars */', [{"type": "uint_b16", "value": 0x7fff3018edb8, "num": 45, "unit": "vars"}]),
+    ('0x1d2b4b0 /* 209 entries */', [{"type": "uint_b16", "value": 0x1d2b4b0, "comment": "209 entries"}]),
+    ('0x7fff3018edb8 /* 45 vars */', [{"type": "uint_b16", "value": 0x7fff3018edb8, "comment": "45 vars"}]),
     ('[]', [{"type": "list", "children": []}]),
     ('8192*1024', [{"type": "int_b10", "value": 8192, "factor": 1024}]),
     ("~[RTMIN RT_1]", [{"type": "bitset2", "values": ["RTMIN", "RT_1"]}]),
@@ -179,6 +179,7 @@ EXPECTATIONS = [
         'items': [{'name': 'mask', 'type': 'named_arg', 'value': {'type': 'list', 'children': []}}]
     }]),
     ("[BUS SEGV]", [{'type': 'bitset3', 'values': ['BUS', 'SEGV']}]),
+    ("0x29 /* CAP_??? */", [{'type': 'uint_b16', 'value': 0x29, 'comment': 'CAP_???'}]),
     # Add more examples here.
 ]
 

@@ -26,10 +26,11 @@ arg_list_grammar = r"""
          | OCT_NUMBER                         -> oct_number
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
          | "[" DEC_NUMBER "->" DEC_NUMBER "]" -> partial_length
-         | HEX_NUMBER [" /* " DEC_NUMBER " " ID " */"] -> hex_number
+         | HEX_NUMBER [COMMENT] -> hex_number
          | STRING [complete]                  -> string
          | "[{WIFEXITED(s) && WEXITSTATUS(s) == " DEC_NUMBER "}]" -> exit_status
     complete: "..."
+    COMMENT: / \/\* ((?!\*\/).)+ \*\//
     ID: /(?!0[x<0-9])[A-Za-z0-9_]+/
     FD_START.2: /\d+</
     FD_MAIN.1: /((?<!>)|(?<=->))[^<>]+/
@@ -88,11 +89,11 @@ class ArgListTransformer(lark.Transformer):
             return {"type": "int_b10", "value": int(value), "factor": int(factor)}
         return {"type": "int_b10", "value": int(value)}
 
-    def hex_number(self, value, num_comment, unit_comment):
-        assert (num_comment is None) == (unit_comment is None)
-        if num_comment is not None:
-            return {"type": "uint_b16", "value": int(value[2:], 16), "num": int(num_comment.value), "unit": unit_comment.value}
-        return {"type": "uint_b16", "value": int(value[2:], 16)}
+    def hex_number(self, value, comment):
+        return_value = {"type": "uint_b16", "value": int(value[2:], 16)}
+        if comment is not None:
+            return_value["comment"] = comment.value[len(" /* ") : -len(" */")]
+        return return_value
 
     def STRING(self, token):
         token = token[1:-1]
