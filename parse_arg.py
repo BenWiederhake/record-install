@@ -99,7 +99,13 @@ class ArgListTransformer(lark.Transformer):
                             raise EscapeError(f"Invalid octal code {token[i : i+3]!r}")
                     out += chr(int(token[i:i + l], 8))
                     i += l
-                elif token[i] in ESCAPE_CHAR_TO_CHAR:
+                elif len(token) > i and token[i] == "x":
+                    hexcode = token[i + 1 : i + 3]
+                    if len(hexcode) != 2:
+                        raise EscapeError(f"Invalid hex code {hexcode!r}")
+                    out += chr(int(hexcode, 16))
+                    i += 3
+                elif len(token) > i and token[i] in ESCAPE_CHAR_TO_CHAR:
                     out += ESCAPE_CHAR_TO_CHAR[token[i]]
                     i += 1
                 else:

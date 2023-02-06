@@ -130,6 +130,11 @@ EXPECTATIONS = [
     ("child_stack=NULL", [{"type": "named_arg", "name": "child_stack", "value": {"type": "identifier", "name": "NULL"}}]),
     ("{B38400 opost}", [{"type": "ioctl_set", "values": ["B38400", "opost"], "complete": True}]),
     ("{B38400 opost isig icanon echo ...}", [{"type": "ioctl_set", "values": ["B38400", "opost", "isig", "icanon", "echo"], "complete": False}]),
+    # This format appears for getrandom and ONLY getrandom.
+    # WHY?! Each byte takes up 3 output bytes, but with octal encoding it could be even smaller. So space isn't the reason.
+    # Speed doesn't seem reasonable either: getrandom() really shouldn't be called in a tight loop anyway, and accounts for 40 out of 80k syscalls in some sample I made, so speed isn't the reason either.
+    (r'"\x2f\xb0\x32\x2f\xce\xc2\x22\xf0"', [{"type": "string", "complete": True, "value": "\x2f\xb0\x32\x2f\xce\xc2\x22\xf0"}]),
+    (r'"\xc2\x22\x61\xbf\xbf\x92\x42\x62\x22\xa0\xb0\x32\xb5\x3f\xc2\x03\x22\xd2\x2b\x21\x24\x12\xfd\x61"', [{"type": "string", "complete": True, "value": "\xc2\x22\x61\xbf\xbf\x92\x42\x62\x22\xa0\xb0\x32\xb5\x3f\xc2\x03\x22\xd2\x2b\x21\x24\x12\xfd\x61"}]),
 ]
 
 NEGATIVES = [
