@@ -121,6 +121,12 @@ EXPECTATIONS = [
     ("htonl(0)", [{"type": "call", "function": "htonl", "args": [{"type": "int_b10", "value": 0}]}]),
     ('if_nametoindex("enp2s0")', [{"type": "call", "function": "if_nametoindex", "args": [{"type": "string", "value": "enp2s0", "complete": True}]}]),
     ('makedev(0x88, 0x8)', [{"type": "call", "function": "makedev", "args": [{"type": "uint_b16", "value": 0x88}, {"type": "uint_b16", "value": 0x8}]}]),
+    ('-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL', [
+        {"type": "int_b10", "value": -1},
+        {"type": "exit_status", "value": 0},
+        {"type": "int_b10", "value": 0},
+        {"type": "identifier", "name": "NULL"},
+    ]),
 ]
 
 NEGATIVES = [

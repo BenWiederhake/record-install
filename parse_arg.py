@@ -19,6 +19,7 @@ arg_list_grammar = r"""
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
          | HEX_NUMBER [" /* " DEC_NUMBER " " ID " */"] -> hex_number
          | STRING [complete]                  -> string
+         | "[{WIFEXITED(s) && WEXITSTATUS(s) == " DEC_NUMBER "}]" -> exit_status
     complete: "..."
     key_value: ID "=" value
     ID: /(?!0[x<0-9])[A-Za-z0-9_]+/
@@ -133,6 +134,9 @@ class ArgListTransformer(lark.Transformer):
 
     def call(self, fn_name, *args):
         return {"type": "call", "function": fn_name, "args": list(args)}
+
+    def exit_status(self, exit_code):
+        return {"type": "exit_status", "value": int(exit_code)}
 
 
 lark.logger.setLevel(logging.DEBUG)
