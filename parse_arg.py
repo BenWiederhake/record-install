@@ -26,7 +26,7 @@ arg_list_grammar = r"""
          | ID ("|" ID)+                       -> bitset
          | ID                                 -> identifier
          | FD_START FD_MAIN [FD_META] ">"     -> fd
-         | DEC_NUMBER                         -> dec_number
+         | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
          | HEX_NUMBER [" /* " DEC_NUMBER " " ID " */"] -> hex_number
          | STRING [complete]                  -> string
     complete: "..."
@@ -71,12 +71,14 @@ class ArgListTransformer(lark.Transformer):
     def bitset(self, *values):
         return {"type": "bitset", "values": [v.value for v in values]}
 
-    def dec_number(self, value):
+    def dec_number(self, value, factor):
+        if factor is not None:
+            return {"type": "int_b10", "value": int(value), "factor": int(factor)}
         return {"type": "int_b10", "value": int(value)}
 
     def hex_number(self, value, num_comment, unit_comment):
         assert (num_comment is None) == (unit_comment is None)
-        if num_comment:
+        if num_comment is not None:
             return {"type": "uint_b16", "value": int(value[2:], 16), "num": int(num_comment.value), "unit": unit_comment.value}
         return {"type": "uint_b16", "value": int(value[2:], 16)}
 
