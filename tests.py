@@ -173,6 +173,11 @@ EXPECTATIONS = [
             }
         ],
     }]),
+    ("{mask=[]}", [{
+        'type': 'struct',
+        'complete': True,
+        'items': [{'name': 'mask', 'type': 'named_arg', 'value': {'type': 'list', 'children': []}}]
+    }]),
     # Add more examples here.
 ]
 

@@ -14,6 +14,7 @@ arg_list_grammar = r"""
             // Must require at least TWO entries so that we have seen the comma,
             // which distinguishes it from a ioctl set. Note that a "struct" of
             // only zero or one identifier(s) is meaningless anyway.
+         | "{" ID "=" atom "}" -> struct_single_val  // hack
          | "{" (ID (" " ID)*)? [" " complete] "}" -> ioctl_set
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
@@ -145,6 +146,9 @@ class ArgListTransformer(lark.Transformer):
             is_complete = True
             assert isinstance(entries_and_complete_marker[-1], dict), entries_and_complete_marker[-1]
         return {"type": "struct", "complete": is_complete, "items": list(entries_and_complete_marker)}
+
+    def struct_single_val(self, name, value):
+        return {"type": "struct", "complete": True, "items": [self.named_argument(name, value)]}
 
     def call(self, fn_name, *args):
         return {"type": "call", "function": fn_name.value, "args": list(args)}
