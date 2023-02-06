@@ -73,40 +73,22 @@ EXPECTATIONS = [
     ('[1, 2, 3]', [{"type": "list", "children": [{"type": "int_b10", "value": 1}, {"type": "int_b10", "value": 2}, {"type": "int_b10", "value": 3}]}]),
     ('3<TCPv6:[41664597]>, FIONBIO, [1]', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}, {"type": "identifier", "name": "FIONBIO"}, {"type": "list", "children": [{"type": "int_b10", "value": 1}]}]),
     ('{fd=0</dev/pts/8<char 136:8>>, events=0}', [
-        {"type": "struct", "complete": True, "items": {
-            "fd": {"type": "fd", "value": 0, "path": "/dev/pts/8", "metadata": "char 136:8"},
-            "events": {"type": "int_b10", "value": 0},
-        }},
-    ]),
-    ('[{fd=0</dev/pts/8<char 136:8>>, events=0}, {fd=1<pipe:[41666807]>, events=0}, {fd=2<pipe:[41666807]>, events=0}], 3, 0', [
-        {"type": "list", "children": [
-            {"type": "struct", "complete": True, "items": {
-                "fd": {"type": "fd", "value": 0, "path": "/dev/pts/8", "metadata": "char 136:8"},
-                "events": {"type": "int_b10", "value": 0},
-            }},
-            {"type": "struct", "complete": True, "items": {
-                "fd": {"type": "fd", "value": 1, "path": "pipe:[41666807]", "metadata": None},
-                "events": {"type": "int_b10", "value": 0},
-            }},
-            {"type": "struct", "complete": True, "items": {
-                "fd": {"type": "fd", "value": 2, "path": "pipe:[41666807]", "metadata": None},
-                "events": {"type": "int_b10", "value": 0},
-            }},
+        {"type": "struct", "complete": True, "items": [
+            {'name': 'fd', 'type': 'named_arg', 'value': {'metadata': 'char 136:8', 'path': '/dev/pts/8', 'type': 'fd', 'value': 0}},
+            {'name': 'events', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 0}}
         ]},
-        {"type": "int_b10", "value": 3},
-        {"type": "int_b10", "value": 0},
     ]),
     ("{st_mode=S_IFDIR|0755, st_size=4096}", [
-        {"type": "struct", "complete": True, "items": {
-            "st_mode": {"type": "bitset", "values": ["S_IFDIR", '0755']},
-            "st_size": {"type": "int_b10", "value": 4096}
-        }},
+        {"type": "struct", "complete": True, "items": [
+            {'name': 'st_mode', 'type': 'named_arg', 'value': {'type': 'bitset', 'values': ['S_IFDIR', '0755']}},
+            {'name': 'st_size', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 4096}},
+        ]},
     ]),
     ("{st_mode=S_IFDIR|0755, st_size=4096, ...}", [
-        {"type": "struct", "complete": False, "items": {
-            "st_mode": {"type": "bitset", "values": ["S_IFDIR", '0755']},
-            "st_size": {"type": "int_b10", "value": 4096}
-        }},
+        {"type": "struct", "complete": False, "items": [
+            {'name': 'st_mode', 'type': 'named_arg', 'value': {'type': 'bitset', 'values': ['S_IFDIR', '0755']}},
+            {'name': 'st_size', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 4096}},
+        ]},
     ]),
     (r'"TZif2\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\t\0\0\0\t\0\0\0\0"...', [{"type": "string", "value": "TZif2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00\t\x00\x00\x00\x00", "complete": False}]),
     ('0x1d2b4b0 /* 209 entries */', [{"type": "uint_b16", "value": 0x1d2b4b0, "num": 209, "unit": "entries"}]),
@@ -136,20 +118,62 @@ EXPECTATIONS = [
     (r'"\x2f\xb0\x32\x2f\xce\xc2\x22\xf0"', [{"type": "string", "complete": True, "value": "\x2f\xb0\x32\x2f\xce\xc2\x22\xf0"}]),
     (r'"\xc2\x22\x61\xbf\xbf\x92\x42\x62\x22\xa0\xb0\x32\xb5\x3f\xc2\x03\x22\xd2\x2b\x21\x24\x12\xfd\x61"', [{"type": "string", "complete": True, "value": "\xc2\x22\x61\xbf\xbf\x92\x42\x62\x22\xa0\xb0\x32\xb5\x3f\xc2\x03\x22\xd2\x2b\x21\x24\x12\xfd\x61"}]),
     ("&sin6_addr", [{"type": "reference", "name": "sin6_addr"}]),
-    ('{sa_family=AF_INET6, sin6_port=htons(443), sin6_flowinfo=htonl(0), inet_pton(AF_INET6, "2a00:1234:1234::223", &sin6_addr)}', [
-        {"type": "struct", "complete": True, "items": {
-            "sa_family": {"type": "identifier", "name": "AF_INET6"},
-            "sin6_port": {"type": "call", "function": "htons", "args": [{"type": "int_b10", "value": 443}]},
-            "sin6_flowinfo": {"type": "call", "function": "htonl", "args": [{"type": "int_b10", "value": 0}]},
-            "inet_pton": {"type": "call", "function": "inet_pton", "args": [
-                {"type": "identifier", "name": "AF_INET6"},
-                {"type": "string", "complete": True, "value": "2a00:1234:1234::223"},
-                {"type": "reference", "name": "sin6_addr"},
-            ]},
-        }},
-    ]),
+    ('{sa_family=AF_INET6, sin6_port=htons(443), sin6_flowinfo=htonl(0), inet_pton(AF_INET6, "2a00:1234:1234::223", &sin6_addr)}', [{
+        'type': 'struct',
+        'complete': True,
+        'items': [
+            {'type': 'named_arg', 'name': 'sa_family', 'value': {'name': 'AF_INET6', 'type': 'identifier'}},
+            {'type': 'named_arg', 'name': 'sin6_port', 'value': {'args': [{'type': 'int_b10', 'value': 443}], 'function': 'htons', 'type': 'call'}},
+            {'type': 'named_arg', 'name': 'sin6_flowinfo', 'value': {'args': [{'type': 'int_b10', 'value': 0}], 'function': 'htonl', 'type': 'call'}},
+            {'type': 'call', 'function': 'inet_pton', 'args': [
+                {'name': 'AF_INET6', 'type': 'identifier'},
+                {'type': 'string', 'complete': True, 'value': '2a00:1234:1234::223'},
+                {'type': 'reference', 'name': 'sin6_addr'}
+            ]}
+        ],
+    }]),
     ("[28->16]", [{"type": "partial_length", "provided": 28, "actual": 16}]),
     ("[128->28]", [{"type": "partial_length", "provided": 128, "actual": 28}]),
+    # The following two examples are from real-life. I wish strace would output something saner.
+    ("{{len=20, type=NLMSG_DONE, flags=NLM_F_MULTI, seq=1234567890, pid=1234567}, 0}", [{
+        'type': 'struct',
+        'complete': True,
+        'items': [
+            {'type': 'struct', 'complete': True, 'items': [
+                {'name': 'len', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 20}},
+                {'name': 'type', 'type': 'named_arg', 'value': {'name': 'NLMSG_DONE', 'type': 'identifier'}},
+                {'name': 'flags', 'type': 'named_arg', 'value': {'name': 'NLM_F_MULTI', 'type': 'identifier'}},
+                {'name': 'seq', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 1234567890}},
+                {'name': 'pid', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 1234567}}
+            ]},
+            {'type': 'int_b10', 'value': 0}
+        ],
+    }]),
+    ("{{len=20, type=RTM_GETADDR, flags=NLM_F_REQUEST|NLM_F_DUMP, seq=1234567890, pid=0}, {ifa_family=AF_UNSPEC, ...}}", [{
+        'type': 'struct',
+        'complete': True,
+        'items': [
+            {
+                'type': 'struct',
+                'complete': True,
+                'items': [
+                    {'name': 'len', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 20}},
+                    {'name': 'type', 'type': 'named_arg', 'value': {'name': 'RTM_GETADDR', 'type': 'identifier'}},
+                    {'name': 'flags', 'type': 'named_arg', 'value': {'type': 'bitset', 'values': ['NLM_F_REQUEST', 'NLM_F_DUMP']}},
+                    {'name': 'seq', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 1234567890}},
+                    {'name': 'pid', 'type': 'named_arg', 'value': {'type': 'int_b10', 'value': 0}}
+                ],
+            },
+            {
+                'type': 'struct',
+                'complete': False,
+                'items': [
+                    {'name': 'ifa_family', 'type': 'named_arg', 'value': {'name': 'AF_UNSPEC', 'type': 'identifier'}}
+                ],
+            }
+        ],
+    }]),
+    # Add more examples here.
 ]
 
 NEGATIVES = [

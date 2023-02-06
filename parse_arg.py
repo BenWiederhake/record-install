@@ -10,7 +10,10 @@ arg_list_grammar = r"""
     ?value: atom
         | ID "=" atom                         -> named_argument
     ?atom: "[" (value (", " value)*)? "]"        -> list
-         | "{" key_value (", " key_value)* [", " complete] "}" -> struct
+         | "{" value ", " (value ", ")* (value | complete) "}" -> struct
+            // Must require at least TWO entries so that we have seen the comma,
+            // which distinguishes it from a ioctl set. Note that a "struct" of
+            // only zero or one identifier(s) is meaningless anyway.
          | "{" (ID (" " ID)*)? [" " complete] "}" -> ioctl_set
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
@@ -25,9 +28,7 @@ arg_list_grammar = r"""
          | STRING [complete]                  -> string
          | "[{WIFEXITED(s) && WEXITSTATUS(s) == " DEC_NUMBER "}]" -> exit_status
     complete: "..."
-    key_value: /inet_pton\(/ value ", " value ", " value ")" -> fake_inet_pton_kv
-         | ID "=" value
-    ID: /(?!0[x<0-9])(?!inet_pton)[A-Za-z0-9_]+/
+    ID: /(?!0[x<0-9])[A-Za-z0-9_]+/
     FD_START.2: /\d+</
     FD_MAIN.1: /((?<!>)|(?<=->))[^<>]+/
     FD_META: /<[^<>]*>>/
@@ -136,20 +137,14 @@ class ArgListTransformer(lark.Transformer):
     def key_value(self, key, value):
         return (key.value, value)
 
-    def fake_inet_pton_kv(self, self_name, *args):
-        # This is *so* stupid.
-        self_name.value = self_name.value[: -1]
-        return self.key_value(self_name, self.call(self_name, *args))
-
-    def struct(self, *pairs_and_complete_marker):
-        pairs = pairs_and_complete_marker[:-1]
-        complete_marker = pairs_and_complete_marker[-1]
-        struct_dict = dict()
-        for key, value in pairs:
-            if key in struct_dict:
-                raise EscapeError(f"Duplicate key {key!r}?!")
-            struct_dict[key] = value
-        return {"type": "struct", "complete": complete_marker is None, "items": struct_dict}
+    def struct(self, *entries_and_complete_marker):
+        if isinstance(entries_and_complete_marker[-1], lark.Tree):
+            is_complete = False
+            entries_and_complete_marker = entries_and_complete_marker[: -1]
+        else:
+            is_complete = True
+            assert isinstance(entries_and_complete_marker[-1], dict), entries_and_complete_marker[-1]
+        return {"type": "struct", "complete": is_complete, "items": list(entries_and_complete_marker)}
 
     def call(self, fn_name, *args):
         return {"type": "call", "function": fn_name.value, "args": list(args)}
