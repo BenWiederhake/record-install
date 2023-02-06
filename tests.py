@@ -178,6 +178,7 @@ EXPECTATIONS = [
         'complete': True,
         'items': [{'name': 'mask', 'type': 'named_arg', 'value': {'type': 'list', 'children': []}}]
     }]),
+    ("[BUS SEGV]", [{'type': 'bitset3', 'values': ['BUS', 'SEGV']}]),
     # Add more examples here.
 ]
 

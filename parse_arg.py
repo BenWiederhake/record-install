@@ -18,6 +18,7 @@ arg_list_grammar = r"""
          | "{" (ID (" " ID)*)? [" " complete] "}" -> ioctl_set
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
+         | "[" ID (" " ID)+ "]"               -> bitset3
          | ID                                 -> identifier
          | "&" ID                             -> reference
          | ID "(" (value (", " value)*)? ")"  -> call
@@ -75,6 +76,9 @@ class ArgListTransformer(lark.Transformer):
 
     def bitset2(self, *values):
         return {"type": "bitset2", "values": [v.value for v in values]}
+
+    def bitset3(self, *values):
+        return {"type": "bitset3", "values": [v.value for v in values]}
 
     def oct_number(self, value):
         return {"type": "uint_b8", "value": int(value, 8)}
