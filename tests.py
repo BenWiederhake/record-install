@@ -136,6 +136,18 @@ EXPECTATIONS = [
     (r'"\x2f\xb0\x32\x2f\xce\xc2\x22\xf0"', [{"type": "string", "complete": True, "value": "\x2f\xb0\x32\x2f\xce\xc2\x22\xf0"}]),
     (r'"\xc2\x22\x61\xbf\xbf\x92\x42\x62\x22\xa0\xb0\x32\xb5\x3f\xc2\x03\x22\xd2\x2b\x21\x24\x12\xfd\x61"', [{"type": "string", "complete": True, "value": "\xc2\x22\x61\xbf\xbf\x92\x42\x62\x22\xa0\xb0\x32\xb5\x3f\xc2\x03\x22\xd2\x2b\x21\x24\x12\xfd\x61"}]),
     ("&sin6_addr", [{"type": "reference", "name": "sin6_addr"}]),
+    ('{sa_family=AF_INET6, sin6_port=htons(443), sin6_flowinfo=htonl(0), inet_pton(AF_INET6, "2a00:1234:1234::223", &sin6_addr)}', [
+        {"type": "struct", "complete": True, "items": {
+            "sa_family": {"type": "identifier", "name": "AF_INET6"},
+            "sin6_port": {"type": "call", "function": "htons", "args": [{"type": "int_b10", "value": 443}]},
+            "sin6_flowinfo": {"type": "call", "function": "htonl", "args": [{"type": "int_b10", "value": 0}]},
+            "inet_pton": {"type": "call", "function": "inet_pton", "args": [
+                {"type": "identifier", "name": "AF_INET6"},
+                {"type": "string", "complete": True, "value": "2a00:1234:1234::223"},
+                {"type": "reference", "name": "sin6_addr"},
+            ]},
+        }},
+    ]),
 ]
 
 NEGATIVES = [

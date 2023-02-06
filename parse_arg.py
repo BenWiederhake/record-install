@@ -24,8 +24,9 @@ arg_list_grammar = r"""
          | STRING [complete]                  -> string
          | "[{WIFEXITED(s) && WEXITSTATUS(s) == " DEC_NUMBER "}]" -> exit_status
     complete: "..."
-    key_value: ID "=" value
-    ID: /(?!0[x<0-9])[A-Za-z0-9_]+/
+    key_value: /inet_pton\(/ value ", " value ", " value ")" -> fake_inet_pton_kv
+         | ID "=" value
+    ID: /(?!0[x<0-9])(?!inet_pton)[A-Za-z0-9_]+/
     FD_START.2: /\d+</
     FD_MAIN.1: /((?<!>)|(?<=->))[^<>]+/
     FD_META: /<[^<>]*>>/
@@ -134,6 +135,11 @@ class ArgListTransformer(lark.Transformer):
     def key_value(self, key, value):
         return (key.value, value)
 
+    def fake_inet_pton_kv(self, self_name, *args):
+        # This is *so* stupid.
+        self_name.value = self_name.value[: -1]
+        return self.key_value(self_name, self.call(self_name, *args))
+
     def struct(self, *pairs_and_complete_marker):
         pairs = pairs_and_complete_marker[:-1]
         complete_marker = pairs_and_complete_marker[-1]
@@ -145,7 +151,7 @@ class ArgListTransformer(lark.Transformer):
         return {"type": "struct", "complete": complete_marker is None, "items": struct_dict}
 
     def call(self, fn_name, *args):
-        return {"type": "call", "function": fn_name, "args": list(args)}
+        return {"type": "call", "function": fn_name.value, "args": list(args)}
 
     def exit_status(self, exit_code):
         return {"type": "exit_status", "value": int(exit_code)}
