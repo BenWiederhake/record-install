@@ -116,6 +116,7 @@ EXPECTATIONS = [
     ("~[RTMIN RT_1]", [{"type": "bitset2", "values": ["RTMIN", "RT_1"]}]),
     ("0123", [{"type": "uint_b8", "value": 0o123}]),
     ("0777", [{"type": "uint_b8", "value": 0o777}]),
+    ("3<UDPv6:[[2a02:1234:1234:1234:1234:1234:1234:abcd]:60696->[2a04:1234:1234::1234]:443]>", [{"type": "fd", "value": 3, "path": "UDPv6:[[2a02:1234:1234:1234:1234:1234:1234:abcd]:60696->[2a04:1234:1234::1234]:443]", "metadata": None}]),
 ]
 
 NEGATIVES = [

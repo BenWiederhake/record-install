@@ -13,7 +13,7 @@ arg_list_grammar = r"""
          | ID ("|" (ID | OCT_NUMBER))+        -> bitset
          | "~[" (ID (" " ID)*)? "]"           -> bitset2
          | ID                                 -> identifier
-         | FD_START FD_MAIN [FD_META] ">"     -> fd
+         | FD_START FD_MAIN [">" FD_MAIN] (FD_META | ">")     -> fd
          | OCT_NUMBER                         -> oct_number
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
          | HEX_NUMBER [" /* " DEC_NUMBER " " ID " */"] -> hex_number
@@ -22,8 +22,8 @@ arg_list_grammar = r"""
     key_value: ID "=" value
     ID: /(?!0[x<0-9])[A-Za-z0-9_]+/
     FD_START.2: /\d+</
-    FD_MAIN: /[^<>]+/
-    FD_META: /<[^>]*>/
+    FD_MAIN.1: /((?<!>)|(?<=->))[^<>]+/
+    FD_META: /<[^<>]*>>/
     HEX_NUMBER: /0x[\dA-Fa-f]+(?!\w)/
     DEC_NUMBER.1: /-?(0(?![x<0-9])|[1-9][0-9]*)(?!x0-9)/
     OCT_NUMBER: /0([0-7]+)(?!0-9)/
@@ -108,9 +108,11 @@ class ArgListTransformer(lark.Transformer):
     def string(self, value, complete_marker):
         return {"type": "string", "value": value, "complete": not complete_marker}
 
-    def fd(self, start, main, meta):
+    def fd(self, start, main, main_continue, meta=None):
+        if main_continue is not None:
+            main = main + ">" + main_continue
         return {"type": "fd", "value": int(start[:-1]), "path": self.STRING('"' + main + '"'),
-                "metadata": None if meta is None else meta[1:-1]}
+                "metadata": None if meta is None else meta[1:-2]}
 
     def list(self, *children):
         return {"type": "list", "children": list(children)}
