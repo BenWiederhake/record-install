@@ -20,6 +20,7 @@ arg_list_grammar = r"""
          | FD_START FD_MAIN [">" FD_MAIN] (FD_META | ">")     -> fd
          | OCT_NUMBER                         -> oct_number
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
+         | "[" DEC_NUMBER "->" DEC_NUMBER "]" -> partial_length
          | HEX_NUMBER [" /* " DEC_NUMBER " " ID " */"] -> hex_number
          | STRING [complete]                  -> string
          | "[{WIFEXITED(s) && WEXITSTATUS(s) == " DEC_NUMBER "}]" -> exit_status
@@ -164,6 +165,9 @@ class ArgListTransformer(lark.Transformer):
         ioctls = [e.value for e in ioctls]
         complete_marker = ioctls_and_complete_marker[-1]
         return {"type": "ioctl_set", "complete": complete_marker is None, "values": ioctls}
+
+    def partial_length(self, provided, actual):
+        return {"type": "partial_length", "provided": int(provided), "actual": int(actual)}
 
 
 lark.logger.setLevel(logging.DEBUG)

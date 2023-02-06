@@ -148,6 +148,8 @@ EXPECTATIONS = [
             ]},
         }},
     ]),
+    ("[28->16]", [{"type": "partial_length", "provided": 28, "actual": 16}]),
+    ("[128->28]", [{"type": "partial_length", "provided": 128, "actual": 28}]),
 ]
 
 NEGATIVES = [
