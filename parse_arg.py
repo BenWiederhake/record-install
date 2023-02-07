@@ -26,7 +26,7 @@ arg_list_grammar = r"""
          | FD_START FD_MAIN [">" FD_MAIN] (FD_META | ">")     -> fd
          | OCT_NUMBER                         -> oct_number
          | DEC_NUMBER ["*" DEC_NUMBER]        -> dec_number
-         | "[" DEC_NUMBER "->" DEC_NUMBER "]" -> partial_length
+         | DEC_NUMBER "->" DEC_NUMBER         -> partial_length
          | HEX_NUMBER [COMMENT] -> hex_number
          | STRING [complete]                  -> string
          | "[{WIFEXITED(s) && WEXITSTATUS(s) == " DEC_NUMBER "}]" -> exit_status

@@ -132,8 +132,8 @@ EXPECTATIONS = [
             ]}
         ],
     }]),
-    ("[28->16]", [{"type": "partial_length", "provided": 28, "actual": 16}]),
-    ("[128->28]", [{"type": "partial_length", "provided": 128, "actual": 28}]),
+    ("[28->16]", [{"type": "list", "complete": True, "children": [{"type": "partial_length", "provided": 28, "actual": 16}]}]),
+    ("[128->28]", [{"type": "list", "complete": True, "children": [{"type": "partial_length", "provided": 128, "actual": 28}]}]),
     # The following two examples are from real-life. I wish strace would output something saner.
     ("{{len=20, type=NLMSG_DONE, flags=NLM_F_MULTI, seq=1234567890, pid=1234567}, 0}", [{
         'type': 'struct',
@@ -188,6 +188,7 @@ EXPECTATIONS = [
     (r'[42, 43, 44, ...]', [{"type": "list", "complete": False, "children": [
         {'type': 'int_b10', 'value': 42}, {'type': 'int_b10', 'value': 43}, {'type': 'int_b10', 'value': 44}
     ]}]),
+    (r'msg_namelen=28->16', [{'type': 'named_arg', 'name': 'msg_namelen', 'value': {'type': 'partial_length', 'actual': 16, 'provided': 28}}]),
     # Add more examples here.
 ]
 
