@@ -180,6 +180,11 @@ EXPECTATIONS = [
     }]),
     ("[BUS SEGV]", [{'type': 'bitset3', 'values': ['BUS', 'SEGV']}]),
     ("0x29 /* CAP_??? */", [{'type': 'uint_b16', 'value': 0x29, 'comment': 'CAP_???'}]),
+    ("{tls=0x7f123456789a} => {parent_tid=[123456]}", [{
+        'type': 'inout',
+        'in': {'complete': True, 'items': [{'name': 'tls', 'type': 'named_arg', 'value': {'type': 'uint_b16', 'value': 139716164221082}}], 'type': 'struct'},
+        'out': {'complete': True, 'items': [{'name': 'parent_tid', 'type': 'named_arg', 'value': {'children': [{'type': 'int_b10', 'value': 123456}], 'type': 'list'}}], 'type': 'struct'},
+    }]),
     # Add more examples here.
 ]
 

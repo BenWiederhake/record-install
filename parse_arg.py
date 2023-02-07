@@ -9,6 +9,7 @@ arg_list_grammar = r"""
     arg_list: (value (", " value)*)?
     ?value: atom
         | ID "=" atom                         -> named_argument
+        | atom " => " atom                  -> inout_param
     ?atom: "[" (value (", " value)*)? "]"        -> list
          | "{" value ", " (value ", ")* (value | complete) "}" -> struct
             // Must require at least TWO entries so that we have seen the comma,
@@ -172,6 +173,9 @@ class ArgListTransformer(lark.Transformer):
 
     def partial_length(self, provided, actual):
         return {"type": "partial_length", "provided": int(provided), "actual": int(actual)}
+
+    def inout_param(self, arg_in, arg_out):
+        return {"type": "inout", "in": arg_in, "out": arg_out}
 
 
 lark.logger.setLevel(logging.DEBUG)
