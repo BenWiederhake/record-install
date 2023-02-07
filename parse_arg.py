@@ -10,7 +10,7 @@ arg_list_grammar = r"""
     ?value: atom
         | ID "=" atom                         -> named_argument
         | atom " => " atom                  -> inout_param
-    ?atom: "[" (value (", " value)*)? "]"        -> list
+    ?atom: "[" (value (", " value)*)? [", " complete] "]"        -> list
          | "{" value ", " (value ", ")* (value | complete) "}" -> struct
             // Must require at least TWO entries so that we have seen the comma,
             // which distinguishes it from a ioctl set. Note that a "struct" of
@@ -138,8 +138,10 @@ class ArgListTransformer(lark.Transformer):
         return {"type": "fd", "value": int(start[:-1]), "path": self.STRING('"' + main + '"'),
                 "metadata": None if meta is None else meta[1:-2]}
 
-    def list(self, *children):
-        return {"type": "list", "children": list(children)}
+    def list(self, *children_and_complete):
+        children = children_and_complete[: -1]
+        incomplete = children_and_complete[-1]
+        return {"type": "list", "children": list(children), "complete": incomplete is None}
 
     def key_value(self, key, value):
         return (key.value, value)

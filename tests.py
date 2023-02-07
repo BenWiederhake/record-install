@@ -69,9 +69,9 @@ EXPECTATIONS = [
     (r'1</dev/null<char 1:3>>', [{"type": "fd", "value": 1, "path": "/dev/null", "metadata": "char 1:3"}]),
     (r'3</tmp/x/THE\"MARKER>', [{"type": "fd", "value": 3, "path": "/tmp/x/THE\"MARKER", "metadata": None}]),
     ('3<TCPv6:[41664597]>', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}]),
-    ('[1]', [{"type": "list", "children": [{"type": "int_b10", "value": 1}]}]),
-    ('[1, 2, 3]', [{"type": "list", "children": [{"type": "int_b10", "value": 1}, {"type": "int_b10", "value": 2}, {"type": "int_b10", "value": 3}]}]),
-    ('3<TCPv6:[41664597]>, FIONBIO, [1]', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}, {"type": "identifier", "name": "FIONBIO"}, {"type": "list", "children": [{"type": "int_b10", "value": 1}]}]),
+    ('[1]', [{"type": "list", "complete": True, "children": [{"type": "int_b10", "value": 1}]}]),
+    ('[1, 2, 3]', [{"type": "list", "complete": True, "children": [{"type": "int_b10", "value": 1}, {"type": "int_b10", "value": 2}, {"type": "int_b10", "value": 3}]}]),
+    ('3<TCPv6:[41664597]>, FIONBIO, [1]', [{"type": "fd", "value": 3, "path": "TCPv6:[41664597]", "metadata": None}, {"type": "identifier", "name": "FIONBIO"}, {"type": "list", "complete": True, "children": [{"type": "int_b10", "value": 1}]}]),
     ('{fd=0</dev/pts/8<char 136:8>>, events=0}', [
         {"type": "struct", "complete": True, "items": [
             {'name': 'fd', 'type': 'named_arg', 'value': {'metadata': 'char 136:8', 'path': '/dev/pts/8', 'type': 'fd', 'value': 0}},
@@ -93,7 +93,7 @@ EXPECTATIONS = [
     (r'"TZif2\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\t\0\0\0\t\0\0\0\0"...', [{"type": "string", "value": "TZif2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\t\x00\x00\x00\t\x00\x00\x00\x00", "complete": False}]),
     ('0x1d2b4b0 /* 209 entries */', [{"type": "uint_b16", "value": 0x1d2b4b0, "comment": "209 entries"}]),
     ('0x7fff3018edb8 /* 45 vars */', [{"type": "uint_b16", "value": 0x7fff3018edb8, "comment": "45 vars"}]),
-    ('[]', [{"type": "list", "children": []}]),
+    ('[]', [{"type": "list", "complete": True, "children": []}]),
     ('8192*1024', [{"type": "int_b10", "value": 8192, "factor": 1024}]),
     ("~[RTMIN RT_1]", [{"type": "bitset2", "values": ["RTMIN", "RT_1"]}]),
     ("0123", [{"type": "uint_b8", "value": 0o123}]),
@@ -176,15 +176,18 @@ EXPECTATIONS = [
     ("{mask=[]}", [{
         'type': 'struct',
         'complete': True,
-        'items': [{'name': 'mask', 'type': 'named_arg', 'value': {'type': 'list', 'children': []}}]
+        'items': [{'name': 'mask', 'type': 'named_arg', 'value': {'type': 'list', "complete": True, 'children': []}}]
     }]),
     ("[BUS SEGV]", [{'type': 'bitset3', 'values': ['BUS', 'SEGV']}]),
     ("0x29 /* CAP_??? */", [{'type': 'uint_b16', 'value': 0x29, 'comment': 'CAP_???'}]),
     ("{tls=0x7f123456789a} => {parent_tid=[123456]}", [{
         'type': 'inout',
         'in': {'complete': True, 'items': [{'name': 'tls', 'type': 'named_arg', 'value': {'type': 'uint_b16', 'value': 139716164221082}}], 'type': 'struct'},
-        'out': {'complete': True, 'items': [{'name': 'parent_tid', 'type': 'named_arg', 'value': {'children': [{'type': 'int_b10', 'value': 123456}], 'type': 'list'}}], 'type': 'struct'},
+        'out': {'complete': True, 'items': [{'name': 'parent_tid', 'type': 'named_arg', 'value': {'children': [{'type': 'int_b10', 'value': 123456}], 'type': 'list', "complete": True}}], 'type': 'struct'},
     }]),
+    (r'[42, 43, 44, ...]', [{"type": "list", "complete": False, "children": [
+        {'type': 'int_b10', 'value': 42}, {'type': 'int_b10', 'value': 43}, {'type': 'int_b10', 'value': 44}
+    ]}]),
     # Add more examples here.
 ]
 
