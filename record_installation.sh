@@ -26,4 +26,8 @@ strace -e all -DDD -I never_tstp -ff -tt --decode-fds=path,socket,dev,pidfd --si
 # Note that this guarantees that any malicious program creates at least *some* indicating
 # that something weird happens. Use `killall -9 strace` for an example.
 
+# # Let's do something much more general instead:
+# strace -e all -DDD -I never_tstp -ff -tt --decode-fds=path,socket,dev,pidfd --silence=attach \
+#     sh -c "traceroute google.de >/dev/null 2>/dev/null" 2>> "$LOGFILE"
+
 echo "Done. Recorded roughly $(wc -l "$LOGFILE" | cut -d" " -f1) syscalls in $LOGFILE"

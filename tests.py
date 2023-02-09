@@ -217,6 +217,7 @@ NEGATIVES = [
 
 class TestArgListParserWorks(unittest.TestCase):
     def test_positive(self):
+        self.maxDiff = 2023
         for i, (input_string, expected) in enumerate(EXPECTATIONS):
             with self.subTest(i=i, input_string=input_string):
                 tree = parse_arg.arg_list_parser.parse(input_string)
