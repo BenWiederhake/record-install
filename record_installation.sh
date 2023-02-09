@@ -1,5 +1,4 @@
 #!/bin/sh
-
 set -eu
 
 if [ "$#" != "1" ]; then
@@ -8,7 +7,6 @@ if [ "$#" != "1" ]; then
 fi
 
 PYTHON="${PYTHON:-python3}"
-PIP="${PIP:-pip3}"
 PACKAGE="$1"
 
 VENVDIR="$(mktemp -d .venv_tmp_XXXXXXXX)"
@@ -22,11 +20,10 @@ echo "Using $VENVDIR to install package '$PACKAGE', logging to $LOGFILE"
 echo "$(date '+%H:%M:%S.000000') Using $VENVDIR to install package '$PACKAGE'." >> "$LOGFILE"
 echo "Setting up venv ..."
 "$PYTHON" -m venv "$VENVDIR"
-echo "Activating venv ..."
-. "$VENVDIR/bin/activate"
 echo "Running and recording ..."
-strace -e all -DDD -I never_tstp -ff -tt --decode-fds=path,socket,dev,pidfd --silence=attach \
-    sh -c "\"$PIP\" install \"$PACKAGE\" >/dev/null 2>/dev/null" 2>> "$LOGFILE"
+strace -e all -DDD -I never_tstp -ff -tt --decode-fds=path,socket,dev,pidfd --silence=attach -s 100 \
+    ./install_and_import.sh "$VENVDIR" "$PACKAGE" 2>>"$LOGFILE"
 # Note that this guarantees that any malicious program creates at least *some* indicating
 # that something weird happens. Use `killall -9 strace` for an example.
+
 echo "Done. Recorded roughly $(wc -l "$LOGFILE" | cut -d" " -f1) syscalls in $LOGFILE"
