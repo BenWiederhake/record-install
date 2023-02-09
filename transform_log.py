@@ -224,6 +224,8 @@ def run_with(log_filename, json_filename):
             line = line.strip()
             parse_line_into(line, lineno, stats)
     stats_dict = stats.finish()
+    stats_dict["source_logfile"] = log_filename
+    stats_dict["events_filename_orig"] = json_filename
     with open(json_filename, "w") as fp:
         json.dump(stats_dict, fp)
     num_events = sum(len(entries) for entries in stats_dict['events'].values())
