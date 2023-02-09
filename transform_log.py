@@ -106,11 +106,16 @@ class Stats:
         pid = self.try_resolve_pid(pid)
         if pid == self.initial_pid:
             self.initial_is_dead = True
-        self.events[pid].append({
+        exit_event = {
             "type": "exit",
             "time": timestr,
             "returncode": returncode,
-        })
+        }
+        try:
+            exit_event["returncode"] = int(returncode)
+        except ValueError:
+            self.log_error(f"ERROR: PID {pid} exits with non-integer return code?! {returncode!r}")
+        self.events[pid].append(exit_event)
 
     def record_signal(self, pid, timestr, signal_name, signal_desc):
         pid = self.try_resolve_pid(pid)
