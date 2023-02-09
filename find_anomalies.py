@@ -13,6 +13,7 @@ UNCHECKED_SYSCALLS = {
     "chmod",
     "clock_nanosleep",
     "clone",
+    "clone3",
     "connect",
     "epoll_create1",
     "execve",
@@ -129,6 +130,11 @@ class PidEventScanner:
         args = syscall_event["args"]
         return len(args) == 1 and args[0]["type"] == "int_b10" and args[0]["value"] == 0
 
+    @syscall_check
+    def check_exit(self, syscall_event):
+        args = syscall_event["args"]
+        return len(args) == 1 and args[0]["type"] == "int_b10" and args[0]["value"] == 0
+
 
 def run_on(events_data):
     anomalous_events = []
@@ -145,7 +151,7 @@ def run(events_json_filename):
     anomalous_events = run_on(events)
     # TODO: Do something clever with the result
     for event in anomalous_events:
-        print(event)
+        print(json.dumps(event))
     print(f"Found {len(anomalous_events)} anomalous events; parsing had {len(events['parse_errors'])} errors.")
     something_weird = bool(anomalous_events)
     something_weird |= bool(events['parse_errors'])
