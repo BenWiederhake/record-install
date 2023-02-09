@@ -51,6 +51,7 @@ class Stats:
         # * values: instance of class UnfinishedSyscall
         self.unfinished_syscalls = dict()
         self.initial_pid = None
+        self.initial_is_dead = False
         # Fun fact: vfork does *NOT* return twice, so no need to handle that.
         # events is a dict of:
         # * keys: pid (e.g. "initial" or 3908497)
@@ -68,6 +69,10 @@ class Stats:
 
     def try_resolve_pid(self, pid):
         if pid == "initial" and self.initial_pid is not None:
+            if self.initial_is_dead:
+                self.log_error(f"ERROR line {lineno + 1}: Activity AFTER parent process died?! Not suppoerted! Events will be mis-categorized as belonging to parent ({self.initial_pid}) instead.")
+                # Prevent duplicate errors
+                self.initial_is_dead = False
             return self.initial_pid
         return pid
 
@@ -99,6 +104,8 @@ class Stats:
 
     def record_exit(self, pid, timestr, returncode):
         pid = self.try_resolve_pid(pid)
+        if pid == self.initial_pid:
+            self.initial_is_dead = True
         self.events[pid].append({
             "type": "exit",
             "time": timestr,
